@@ -3,12 +3,26 @@ import { useEffect, useRef, useState } from "react";
 import { PipWindow } from "@/components/video/PipWindow";
 import { useRoomStore } from "@/lib/store";
 
-function RemoteVideo({ stream }: { stream: MediaStream | null }) {
-  const ref = useRef<HTMLVideoElement>(null);
+function RemoteStream({ stream }: { stream: MediaStream }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hasVideo = stream.getVideoTracks().length > 0;
+
   useEffect(() => {
-    if (ref.current && stream) ref.current.srcObject = stream;
-  }, [stream]);
-  return <video ref={ref} autoPlay playsInline className="w-full h-full object-cover" />;
+    if (audioRef.current) audioRef.current.srcObject = stream;
+    if (videoRef.current) videoRef.current.srcObject = stream;
+  }, [stream, hasVideo]);
+
+  return (
+    <>
+      <audio ref={audioRef} autoPlay playsInline className="hidden" />
+      {hasVideo ? (
+        <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+      ) : (
+        <div className="w-full h-full grid place-items-center text-[8px] opacity-60">audio only</div>
+      )}
+    </>
+  );
 }
 
 export function VideoFeed({ socketId, memberName }: { socketId: string; memberName: string }) {
@@ -18,7 +32,7 @@ export function VideoFeed({ socketId, memberName }: { socketId: string; memberNa
   if (detached) {
     return (
       <PipWindow title={memberName} onReDock={() => setDetached(false)}>
-        <RemoteVideo stream={stream ?? null} />
+        {stream && <RemoteStream stream={stream} />}
       </PipWindow>
     );
   }
@@ -31,7 +45,7 @@ export function VideoFeed({ socketId, memberName }: { socketId: string; memberNa
       title="double-click to detach"
     >
       {stream ? (
-        <RemoteVideo stream={stream} />
+        <RemoteStream stream={stream} />
       ) : (
         <div className="w-full h-full grid place-items-center text-[8px] opacity-50">connecting…</div>
       )}

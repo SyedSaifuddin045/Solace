@@ -19,7 +19,7 @@ function MemberRow({
   onHover: (id: string | null) => void;
 }) {
   const initials = (m.displayName || "?").slice(0, 2).toUpperCase();
-  const showFeed = expanded && m.videoOn && !isSelf;
+  const showFeed = expanded && (m.videoOn || m.audioOn) && !isSelf;
   return (
     <motion.div layout transition={{ type: "spring", stiffness: 300, damping: 28 }} className="flex flex-col items-end gap-1.5">
       <motion.div
