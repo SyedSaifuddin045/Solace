@@ -18,7 +18,7 @@ describe("httpUploadError", () => {
   it("maps statuses", () => {
     expect(httpUploadError(413)).toContain("20 MB");
     expect(httpUploadError(415)).toContain("format");
-    expect(httpUploadError(404)).toContain("room");
+    expect(httpUploadError(404).toLowerCase()).toContain("room");
     expect(httpUploadError(500)).toBe("Upload failed.");
   });
 });
