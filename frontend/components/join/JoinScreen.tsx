@@ -6,6 +6,7 @@ import { AvatarPicker } from "@/components/join/AvatarPicker";
 import { loadPrefs, savePrefs, touchRecentRoom } from "@/lib/prefs";
 import { getSocket } from "@/lib/socket";
 import { useRoomStore } from "@/lib/store";
+import type { Member, RoomState } from "@/lib/store";
 import { userMessage } from "@/lib/errors";
 
 // room code: 6 chars, A-Z + 2-9 (contract). Normalize input.
@@ -33,10 +34,18 @@ export function JoinScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, avatar]);
 
-  const onJoined = (roomId: string) => {
+  const routeToRoom = (roomId: string) => {
     touchRecentRoom(roomId);
     setRecentRooms(loadPrefs().recentRooms);
     router.replace(`/room/${roomId}`);
+  };
+
+  // hydrate store from the join/create snapshot so RoomScreen skips re-join
+  // (server rejects a duplicate join with ALREADY_IN_ROOM)
+  const hydrate = (p?: { roomId?: string; members?: Member[]; state?: RoomState }) => {
+    if (p && p.roomId && p.members && p.state) {
+      useRoomStore.getState().applyEvent("room:joined", p);
+    }
   };
 
   const doJoin = () => {
@@ -46,19 +55,22 @@ export function JoinScreen() {
     setBusy("join");
     setError(null);
     const socket = getSocket();
-    const offJoined = (p?: { roomId: string }) => {
-      offError(); offJoined();
+    const onJoined = (p?: { roomId: string; members?: Member[]; state?: RoomState }) => {
+      socket.off("room:joined", onJoined as never);
+      socket.off("room:error", onError as never);
       setBusy(null);
-      if (p) onJoined(p.roomId);
+      hydrate(p);
+      if (p) routeToRoom(p.roomId);
     };
-    const offError = (p?: { code: string; message: string }) => {
-      offJoined(undefined); offError();
+    const onError = (p?: { code: string; message: string }) => {
+      socket.off("room:joined", onJoined as never);
+      socket.off("room:error", onError as never);
       setBusy(null);
       setError(userMessage(p?.code ?? "", p?.message ?? ""));
       useRoomStore.getState().clearError();
     };
-    socket.on("room:joined", offJoined as never);
-    socket.on("room:error", offError as never);
+    socket.on("room:joined", onJoined as never);
+    socket.on("room:error", onError as never);
     socket.emit("room:join", { roomId: code, displayName: name, avatar });
   };
 
@@ -68,19 +80,22 @@ export function JoinScreen() {
     setBusy("create");
     setError(null);
     const socket = getSocket();
-    const offCreated = (p?: { roomId: string }) => {
-      offError(); offCreated();
+    const onCreated = (p?: { roomId: string; members?: Member[]; state?: RoomState }) => {
+      socket.off("room:created", onCreated as never);
+      socket.off("room:error", onError as never);
       setBusy(null);
-      if (p) onJoined(p.roomId);
+      hydrate(p);
+      if (p) routeToRoom(p.roomId);
     };
-    const offError = (p?: { code: string; message: string }) => {
-      offCreated(undefined); offError();
+    const onError = (p?: { code: string; message: string }) => {
+      socket.off("room:created", onCreated as never);
+      socket.off("room:error", onError as never);
       setBusy(null);
       setError(userMessage(p?.code ?? "", p?.message ?? ""));
       useRoomStore.getState().clearError();
     };
-    socket.on("room:created", offCreated as never);
-    socket.on("room:error", offError as never);
+    socket.on("room:created", onCreated as never);
+    socket.on("room:error", onError as never);
     socket.emit("room:create", { displayName: name, avatar });
   };
 

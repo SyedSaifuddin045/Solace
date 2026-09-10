@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Play, Pause } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
@@ -8,10 +8,11 @@ import { formatRemaining } from "@/lib/time";
 // no per-second updates when collapsed; only expand state ticks a local clock (cheap)
 function useNow(active: boolean) {
   const [now, setNow] = useState(() => Date.now());
-  if (active) {
-    const t = Date.now();
-    if (Math.abs(t - now) >= 250) setNow(t);
-  }
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [active]);
   return now;
 }
 

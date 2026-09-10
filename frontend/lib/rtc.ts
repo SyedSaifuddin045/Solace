@@ -82,9 +82,10 @@ export function initRtc(): void {
     }
     useRoomStore.getState().setRemoteStream(p.socketId, null);
   });
-  socket.on("connect", () => {
+socket.on("connect", () => {
     me = socket.id ?? null;
   });
+  if (socket.connected) me = socket.id ?? null;
 }
 
 const analysers = new Map<string, AnalyserNode>();

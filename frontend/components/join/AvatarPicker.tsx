@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { Camera, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 const MAX_AVATAR_BYTES = 256_000; // cap agrees with CONTRACT-DELTAS (data URL)
 

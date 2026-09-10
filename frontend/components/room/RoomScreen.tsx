@@ -1,7 +1,6 @@
 "use client";
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useRouter } from "next/navigation";
 import { ChromeReveal } from "@/components/room/ChromeReveal";
 import { TitleChip } from "@/components/room/TitleChip";
 import { SongWidget } from "@/components/room/SongWidget";
@@ -19,7 +18,6 @@ import { initRtc, startSpeakingDetection } from "@/lib/rtc";
 export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const params = useParams<{ roomId: string }>();
   const roomId = propRoomId || (params?.roomId as string) || "";
-  const router = useRouter();
 
   const state = useRoomStore((s) => s.state);
   const connected = useRoomStore((s) => s.connected);
@@ -27,7 +25,6 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
   useEffect(() => {
     const socket = getSocket();
-    const s = useRoomStore.getState();
 
     const apply = (event: string) => (payload: unknown) => useRoomStore.getState().applyEvent(event, payload);
     const ons: [string, (p: unknown) => void][] = [
@@ -53,6 +50,12 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       useRoomStore.getState().setConnected(false);
       useRoomStore.getState().setSocketId(null);
     });
+
+    // socket singleton may already be connected (join/create flow) — sync immediately
+    if (socket.connected) {
+      useRoomStore.getState().setConnected(true);
+      useRoomStore.getState().setSocketId(socket.id ?? null);
+    }
 
     // init RTC + speaking detection once per mount
     initRtc();
