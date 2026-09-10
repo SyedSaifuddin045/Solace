@@ -14,6 +14,7 @@ import { ErrorPage } from "@/components/room/ErrorPage";
 import { getSocket } from "@/lib/socket";
 import { useRoomStore } from "@/lib/store";
 import { loadPrefs } from "@/lib/prefs";
+import { initRtc, startSpeakingDetection } from "@/lib/rtc";
 
 export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const params = useParams<{ roomId: string }>();
@@ -44,8 +45,18 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       ["rtc:media_state", apply("rtc:media_state")],
     ];
     ons.forEach(([n, f]) => socket.on(n, f as never));
-    socket.on("connect", () => useRoomStore.getState().setConnected(true));
-    socket.on("disconnect", () => useRoomStore.getState().setConnected(false));
+    socket.on("connect", () => {
+      useRoomStore.getState().setConnected(true);
+      useRoomStore.getState().setSocketId(socket.id ?? null);
+    });
+    socket.on("disconnect", () => {
+      useRoomStore.getState().setConnected(false);
+      useRoomStore.getState().setSocketId(null);
+    });
+
+    // init RTC + speaking detection once per mount
+    initRtc();
+    startSpeakingDetection();
 
     // join (also covers reloads: rejoin replays snapshot via room:joined)
     if (useRoomStore.getState().roomId !== roomId) {

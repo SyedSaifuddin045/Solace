@@ -33,9 +33,16 @@ interface RoomStore {
   state: RoomState;
   error: RoomError | null;
   connected: boolean;
-  speaking: string[]; // socketIds currently talking (rtc module updates)
+  socketId: string | null;
+  speaking: string[];
+  audioOnLocal: boolean;
+  videoOnLocal: boolean;
+  remoteStreams: Record<string, MediaStream>;
   setConnected: (v: boolean) => void;
+  setSocketId: (id: string | null) => void;
   setSpeaking: (ids: string[]) => void;
+  setLocalMedia: (audioOn: boolean, videoOn: boolean) => void;
+  setRemoteStream: (socketId: string, stream: MediaStream | null) => void;
   clearError: () => void;
   reset: () => void;
   applyEvent: (name: string, payload: unknown) => void;
@@ -55,11 +62,24 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   state: EMPTY_STATE,
   error: null,
   connected: false,
+  socketId: null,
   speaking: [],
+  audioOnLocal: false,
+  videoOnLocal: false,
+  remoteStreams: {},
   setConnected: (v) => set({ connected: v }),
+  setSocketId: (id) => set({ socketId: id }),
   setSpeaking: (ids) => set({ speaking: ids }),
+  setLocalMedia: (audioOn, videoOn) => set({ audioOnLocal: audioOn, videoOnLocal: videoOn }),
+  setRemoteStream: (socketId, stream) =>
+    set((s) => {
+      const remoteStreams = { ...s.remoteStreams };
+      if (stream) remoteStreams[socketId] = stream;
+      else delete remoteStreams[socketId];
+      return { remoteStreams };
+    }),
   clearError: () => set({ error: null }),
-  reset: () => set({ roomId: null, members: [], state: EMPTY_STATE, error: null, speaking: [] }),
+  reset: () => set({ roomId: null, members: [], state: EMPTY_STATE, error: null, speaking: [], audioOnLocal: false, videoOnLocal: false, remoteStreams: {} }),
 
   applyEvent: (name, payload) => {
     const s = get();
