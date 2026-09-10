@@ -1,26 +1,88 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* deep charcoal, lit warm */
+  --depth-0: #14110F;
+  --depth-1: #1A1614;
+  --depth-2: #211C19;
+  --depth-3: #29211D;
+  /* warm accents */
+  --accent-amber: #E0A458;
+  --accent-violet: #9B7BB8;
+  --accent-rose: #C98A8A;
+  --accent-bone: #EDE0D2;
+  /* status */
+  --status-success: #7FAE8B;
+  --status-warning: #C9A05A;
+  --status-error: #C97C6E;
+  --status-info: #8FA6C9;
+  /* theme knobs (overridden at runtime from prefs) */
+  --glow: 100%;
+  --dim: 55%;
+  --blur: 14px;
+  --font-display: var(--font-geist-sans), system-ui, sans-serif;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-depth-0: var(--depth-0);
+  --color-depth-1: var(--depth-1);
+  --color-depth-2: var(--depth-2);
+  --color-depth-3: var(--depth-3);
+  --color-amber: var(--accent-amber);
+  --color-violet: var(--accent-violet);
+  --color-rose: var(--accent-rose);
+  --color-bone: var(--accent-bone);
+  --color-ok: var(--status-success);
+  --color-warn: var(--status-warning);
+  --color-err: var(--status-error);
+  --color-info: var(--status-info);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--depth-0);
+  color: var(--accent-bone);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* glass panel primitive — matches .glass class used across plan */
+.glass {
+  background: rgba(26, 22, 20, 0.55);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid rgba(237, 224, 210, 0.1);
+}
+.warm-glow {
+  box-shadow: 0 0 calc(24px * var(--glow) / 100) rgba(224, 164, 88, 0.18);
+}
+.hairline { border: 1px solid rgba(237, 224, 210, 0.08); }
+
+/* wallpaper scene (v1 gradient substitute until uploads/URLs exist) */
+.wallpaper {
+  background:
+    radial-gradient(120% 90% at 70% 22%, rgba(155,123,184,0.22), transparent 60%),
+    radial-gradient(100% 80% at 18% 88%, rgba(224,164,88,0.28), transparent 65%),
+    radial-gradient(140% 120% at 50% 115%, rgba(201,138,138,0.14), transparent 70%),
+    linear-gradient(163deg, #181410 0%, #201A13 42%, #17131A 100%);
+}
+
+/* chrome reveal — one transition set for all corner chrome */
+.chrome { transition: opacity 0.6s cubic-bezier(.4,0,.2,1), transform 0.6s cubic-bezier(.4,0,.2,1); }
+.chrome-hidden { opacity: 0; pointer-events: none; transform: translateY(4px); }
+
+/* song eq bars */
+.eq-bar { animation: eq 1.1s ease-in-out infinite; transform-origin: bottom; }
+@keyframes eq { 0%,100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+
+/* timer hint pulse */
+@keyframes pulse-amber {
+  0%,100% { opacity: 1; box-shadow: 0 0 8px rgba(224,164,88,0.9); }
+  50% { opacity: 0.35; box-shadow: 0 0 2px rgba(224,164,88,0.4); }
+}
+.pulse-amber { animation: pulse-amber 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chrome { transition: opacity 0.2s linear; transform: none; }
+  .eq-bar { animation: none; }
+  .pulse-amber { animation: none; }
 }
