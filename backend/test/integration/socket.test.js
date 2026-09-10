@@ -318,6 +318,50 @@ describe("WebRTC relay + media presence", () => {
         assert.match(env.candidate, /^candidate:/);
     });
 
+    test("offer relays object-shaped sdp (RTCSessionDescription serialization) untouched", async () => {
+        const { port } = await boot();
+        const { client: A, roomId } = await createRoom(port, "Host");
+        const { client: B } = await joinRoom(port, roomId, "Bravo");
+        const offerP = waitForEvent(B, "rtc:offer");
+        const sdp = { type: "offer", sdp: "v=0 fake-offer\n" };
+        A.emit("rtc:offer", { to: B.id, sdp });
+        const env = await offerP;
+        assert.equal(env.from, A.id);
+        assert.deepEqual(env.sdp, sdp);
+    });
+
+    test("ice relays object-shaped candidate (toJSON serialization) untouched", async () => {
+        const { port } = await boot();
+        const { client: A, roomId } = await createRoom(port, "Host");
+        const { client: B } = await joinRoom(port, roomId, "Bravo");
+        const iceP = waitForEvent(B, "rtc:ice");
+        const candidate = { candidate: "candidate:1 1 udp 2122260223 1.2.3.4 5000 typ host", sdpMid: "0", sdpMLineIndex: 0, usernameFragment: "abc" };
+        A.emit("rtc:ice", { to: B.id, candidate });
+        const env = await iceP;
+        assert.equal(env.from, A.id);
+        assert.deepEqual(env.candidate, candidate);
+    });
+
+    test("offer with missing sdp -> INVALID_PAYLOAD", async () => {
+        const { port } = await boot();
+        const { client: A, roomId } = await createRoom(port, "Host");
+        const { client: B } = await joinRoom(port, roomId, "Bravo");
+        const errP = waitForEvent(A, "room:error", (p) => p.code === "INVALID_PAYLOAD");
+        A.emit("rtc:offer", { to: B.id });
+        const err = await errP;
+        assert.equal(err.code, "INVALID_PAYLOAD");
+    });
+
+    test("offer with empty-string sdp -> INVALID_PAYLOAD", async () => {
+        const { port } = await boot();
+        const { client: A, roomId } = await createRoom(port, "Host");
+        const { client: B } = await joinRoom(port, roomId, "Bravo");
+        const errP = waitForEvent(A, "room:error", (p) => p.code === "INVALID_PAYLOAD");
+        A.emit("rtc:offer", { to: B.id, sdp: "" });
+        const err = await errP;
+        assert.equal(err.code, "INVALID_PAYLOAD");
+    });
+
     test("relay to non-member target -> TARGET_NOT_IN_ROOM", async () => {
         const { port } = await boot();
         const { client: A, roomId } = await createRoom(port, "Host");

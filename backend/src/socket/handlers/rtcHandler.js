@@ -38,8 +38,11 @@ function createRtcHandler(io, roomService) {
         }
         const to = payload && payload.to;
         const data = payload && payload[field];
-        if (typeof to !== "string" || typeof data !== "string" || data.length === 0) {
-            emitError(socket, new InvalidPayloadError(`${eventName} requires { to: string, ${field}: string }`));
+        const validData = typeof data === "string"
+            ? data.length > 0
+            : (data != null && typeof data === "object");
+        if (typeof to !== "string" || !validData) {
+            emitError(socket, new InvalidPayloadError(`${eventName} requires { to: string, ${field}: string | object }`));
             return;
         }
         if (!fromRoom.members.has(to)) {

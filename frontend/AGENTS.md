@@ -47,9 +47,9 @@ CORS: server reads `CLIENT_ORIGIN` env (default `http://localhost:3000`). Port f
 | `timer:pause` | _(none)_ |
 | `timer:reset` | _(none)_ |
 | `rtc:media` | `{ audio?, video? }` — booleans |
-| `rtc:offer` | `{ to, sdp }` |
-| `rtc:answer` | `{ to, sdp }` |
-| `rtc:ice` | `{ to, candidate }` |
+| `rtc:offer` | `{ to, sdp }` — sdp: string or object (RTCSessionDescription serialized) |
+| `rtc:answer` | `{ to, sdp }` — sdp: string or object (RTCSessionDescription serialized) |
+| `rtc:ice` | `{ to, candidate }` — candidate: string or object (RTCIceCandidate.toJSON() serialized) |
 
 ### 3. Events — Server → Client
 
@@ -69,9 +69,9 @@ CORS: server reads `CLIENT_ORIGIN` env (default `http://localhost:3000`). Port f
 | `timer:complete` | `{ completedBy, durationMs }` |
 | `rtc:config` | `{ iceServers }` — emitted once on connect |
 | `rtc:media_state` | `{ socketId, audio, video }` |
-| `rtc:offer` | `{ from, sdp }` — relayed |
-| `rtc:answer` | `{ from, sdp }` — relayed |
-| `rtc:ice` | `{ from, candidate }` — relayed |
+| `rtc:offer` | `{ from, sdp }` — relayed; sdp may be string or object |
+| `rtc:answer` | `{ from, sdp }` — relayed; sdp may be string or object |
+| `rtc:ice` | `{ from, candidate }` — relayed; candidate may be string or object |
 
 ### 4. State Shapes
 

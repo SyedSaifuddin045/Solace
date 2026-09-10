@@ -94,7 +94,7 @@ Constraints (`RoomService.js`): max 4 members, displayName ≤24, chat text ≤5
 | WALLPAPER_UPLOADS | `wallpaper:uploads` | `{ uploads }` (library broadcast after upload/eviction) |
 | RTC_CONFIG | `rtc:config` | `{ iceServers }` (emitted on connect) |
 | RTC_MEDIA_STATE | `rtc:media_state` | `{ socketId, audio, video }` |
-| RTC_OFFER/ANSWER/ICE | `rtc:offer` `rtc:answer` `rtc:ice` | `{ from, sdp\|candidate }` (relayed) |
+| RTC_OFFER/ANSWER/ICE | `rtc:offer` `rtc:answer` `rtc:ice` | `{ from, sdp\|candidate }` (relayed; `sdp`/`candidate` may be a string or an object — WebRTC serialized, passed through untouched) |
 
 ## 5. Conventions (hard requirements)
 - **CommonJS**: `require`/`module.exports`. No ESM imports. No build step.
