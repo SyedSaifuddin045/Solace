@@ -8,6 +8,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+> Design + implementation references: `docs/frontend-design/` (UX-SPEC.md, IMPLEMENTATION-PLAN-v1.md, CONTRACT-DELTAS.md, DEFERRED.md) — repo-local, not in git.
+
 ---
 
 ## Backend Contract
