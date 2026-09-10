@@ -56,6 +56,25 @@ const upsertMember = (members: Member[], m: Member): Member[] => {
   return next;
 };
 
+function eventSummary(name: string, payload: unknown): unknown {
+  const p = payload as Record<string, unknown> & { members?: unknown[]; uploads?: Array<{ url: string; kind: string; id: string }> };
+  switch (name) {
+    case "room:created":
+    case "room:joined":
+      return { roomId: p?.roomId, memberCount: p?.members?.length, hasState: !!p?.state };
+    case "playback:state":
+      return { status: p?.status, track: p?.track, position: p?.position, updatedAt: p?.updatedAt };
+    case "wallpaper:state":
+      return { url: p?.url, kind: p?.kind, changedBy: p?.changedBy, updatedAt: p?.updatedAt };
+    case "timer:state":
+      return { status: p?.status, durationMs: p?.durationMs, remainingMs: p?.remainingMs, endsAt: p?.endsAt, startedBy: p?.startedBy };
+    case "wallpaper:uploads":
+      return { uploadsCount: p?.uploads?.length, items: p?.uploads?.map((u) => ({ id: u?.id, kind: u?.kind, url: u?.url })) };
+    default:
+      return p;
+  }
+}
+
 export const useRoomStore = create<RoomStore>((set, get) => ({
   roomId: null,
   members: [],
@@ -83,6 +102,7 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
 
   applyEvent: (name, payload) => {
     const s = get();
+    console.debug("[solace:FE] event", name, eventSummary(name, payload));
     switch (name) {
       case "room:created":
       case "room:joined": {
@@ -148,6 +168,10 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
       }
       default:
         break; // unknown events ignored
+    }
+    if (name === "room:error") {
+      const p = payload as RoomError;
+      console.debug("[solace:FE] room:error", { code: p?.code, message: p?.message });
     }
   },
 }));

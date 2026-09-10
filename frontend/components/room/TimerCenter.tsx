@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Play, Pause, RotateCcw, Minimize2 } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
@@ -13,18 +13,52 @@ export function TimerCenter() {
   const idle = useIdle();
   const { remainingMs, running } = useTimerCountdown(timer);
 
-  const start25 = () => getSocket().emit("timer:start", { minutes: 25 });
-  const pause = () => getSocket().emit("timer:pause");
-  const reset = () => getSocket().emit("timer:reset");
+  useEffect(() => {
+    console.debug("[solace:FE] TimerCenter tick", {
+      status: timer.status,
+      remainingMs,
+      durationMs: timer.durationMs,
+      endsAt: timer.endsAt,
+      running,
+      idle,
+      minimized,
+    });
+  });
+
+  const start25 = () => {
+    console.debug("[solace:FE] timer:start emit", { minutes: 25 });
+    getSocket().emit("timer:start", { minutes: 25 });
+  };
+  const pause = () => {
+    console.debug("[solace:FE] timer:pause emit");
+    getSocket().emit("timer:pause");
+  };
+  const reset = () => {
+    console.debug("[solace:FE] timer:reset emit");
+    getSocket().emit("timer:reset");
+  };
+  const minimize = () => {
+    console.debug("[solace:FE] TimerCenter minimize", { running, idle, status: timer.status });
+    setMinimized(true);
+  };
 
   const hintVisible = running && (idle || minimized);
+
+  useEffect(() => {
+    if (hintVisible) {
+      console.debug("[solace:FE] TimerCenter hint visible (minimized/idle transition)", { running, idle, minimized, status: timer.status });
+    }
+  }, [hintVisible, running, idle, minimized, timer.status]);
 
   return (
     <>
       {/* minimized + running: amber pulse hint */}
       {hintVisible && (
         <button
-          onClick={() => setMinimized(false)}
+          onClick={() => {
+            console.debug("[solace:FE] TimerCenter expand", { running, idle, minimized });
+            setMinimized(false);
+          }}
           className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 opacity-80 hover:opacity-100"
           style={{ color: "var(--accent-amber)" }}
           aria-label="show timer"
@@ -50,7 +84,7 @@ export function TimerCenter() {
               <button onClick={pause} aria-label="Pause" className="hairline rounded-full p-1.5 text-[10px]"><Pause size={10} /></button>
             )}
             <button onClick={reset} aria-label="Reset" className="hairline rounded-full p-1.5 text-[10px]"><RotateCcw size={10} /></button>
-            <button onClick={() => setMinimized(true)} aria-label="Minimize" className="hairline rounded-full p-1.5 text-[10px]"><Minimize2 size={10} /></button>
+            <button onClick={minimize} aria-label="Minimize" className="hairline rounded-full p-1.5 text-[10px]"><Minimize2 size={10} /></button>
           </div>
         </div>
       )}

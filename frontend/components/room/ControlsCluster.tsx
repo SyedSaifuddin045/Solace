@@ -34,9 +34,20 @@ export function ControlsCluster() {
   const toggleMedia = (kind: "audio" | "video") => {
     const nextAudio = kind === "audio" ? !audioOn : audioOn;
     const nextVideo = kind === "video" ? !videoOn : videoOn;
-    void startRtc({ audio: nextAudio, video: nextVideo }).catch(() => {
-      // getUserMedia rejected (permission/device) — media stays off
-    });
+    console.debug("[solace:FE] toggleMedia", { kind, audioOn, videoOn, nextAudio, nextVideo });
+    void startRtc({ audio: nextAudio, video: nextVideo })
+      .then(() => {
+        console.debug("[solace:FE] startRtc resolved", { nextAudio, nextVideo });
+      })
+      .catch((err) => {
+        // getUserMedia rejected (permission/device) — media stays off
+        console.debug("[solace:FE] startRtc rejected", {
+          nextAudio,
+          nextVideo,
+          name: (err as DOMException)?.name,
+          message: (err as DOMException)?.message,
+        });
+      });
   };
 
   return (

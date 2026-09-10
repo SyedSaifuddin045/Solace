@@ -25,6 +25,13 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
   useEffect(() => {
     const socket = getSocket();
+    const storeRoomId = useRoomStore.getState().roomId;
+    console.debug("[solace:FE] RoomScreen mount", {
+      roomId,
+      socketConnected: socket.connected,
+      socketId: socket.id,
+      storeRoomId,
+    });
 
     const apply = (event: string) => (payload: unknown) => useRoomStore.getState().applyEvent(event, payload);
     const ons: [string, (p: unknown) => void][] = [
@@ -41,6 +48,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       ["room:error", apply("room:error")],
       ["rtc:media_state", apply("rtc:media_state")],
     ];
+    console.debug("[solace:FE] RoomScreen listeners registered", ons.map(([n]) => n));
     ons.forEach(([n, f]) => socket.on(n, f as never));
     socket.on("connect", () => {
       useRoomStore.getState().setConnected(true);
@@ -64,7 +72,10 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
     // join (also covers reloads: rejoin replays snapshot via room:joined)
     if (useRoomStore.getState().roomId !== roomId) {
       const prefs = loadPrefs();
+      console.debug("[solace:FE] RoomScreen join emit", { roomId, displayName: prefs.name, hasAvatar: !!prefs.avatar });
       socket.emit("room:join", { roomId, displayName: prefs.name, avatar: prefs.avatar });
+    } else {
+      console.debug("[solace:FE] RoomScreen skip join (store already hydrated)", { roomId });
     }
 
     return () => {
