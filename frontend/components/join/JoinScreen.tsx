@@ -20,7 +20,13 @@ export function JoinScreen() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"join" | "create" | null>(null);
-  const [recentRooms, setRecentRooms] = useState<string[]>(() => loadPrefs().recentRooms);
+  const [recentRooms, setRecentRooms] = useState<string[]>([]);
+
+  useEffect(() => {
+    // client-only mount hydration from localStorage (avoid SSR hydration mismatch)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRecentRooms(loadPrefs().recentRooms);
+  }, []);
 
   const commitPrefs = () => {
     const p = loadPrefs();
@@ -50,6 +56,7 @@ export function JoinScreen() {
 
   const doJoin = () => {
     if (busy) return;
+    console.debug("[solace:FE] doJoin", { busy, name, code: code.trim() });
     if (!code.trim()) { setError("Enter a room code."); return; }
     commitPrefs();
     setBusy("join");
@@ -59,6 +66,7 @@ export function JoinScreen() {
       socket.off("room:joined", onJoined as never);
       socket.off("room:error", onError as never);
       setBusy(null);
+      console.debug("[solace:FE] room:joined received", { roomId: p?.roomId, memberCount: p?.members?.length, hasState: !!p?.state });
       hydrate(p);
       if (p) routeToRoom(p.roomId);
     };
@@ -66,16 +74,19 @@ export function JoinScreen() {
       socket.off("room:joined", onJoined as never);
       socket.off("room:error", onError as never);
       setBusy(null);
+      console.debug("[solace:FE] join room:error received", { code: p?.code, message: p?.message });
       setError(userMessage(p?.code ?? "", p?.message ?? ""));
       useRoomStore.getState().clearError();
     };
     socket.on("room:joined", onJoined as never);
     socket.on("room:error", onError as never);
+    console.debug("[solace:FE] room:join emit", { roomId: code, displayName: name, hasAvatar: !!avatar });
     socket.emit("room:join", { roomId: code, displayName: name, avatar });
   };
 
   const doCreate = () => {
     if (busy) return;
+    console.debug("[solace:FE] doCreate", { busy, name });
     commitPrefs();
     setBusy("create");
     setError(null);
@@ -84,6 +95,7 @@ export function JoinScreen() {
       socket.off("room:created", onCreated as never);
       socket.off("room:error", onError as never);
       setBusy(null);
+      console.debug("[solace:FE] room:created received", { roomId: p?.roomId, memberCount: p?.members?.length, hasState: !!p?.state });
       hydrate(p);
       if (p) routeToRoom(p.roomId);
     };
@@ -91,11 +103,13 @@ export function JoinScreen() {
       socket.off("room:created", onCreated as never);
       socket.off("room:error", onError as never);
       setBusy(null);
+      console.debug("[solace:FE] create room:error received", { code: p?.code, message: p?.message });
       setError(userMessage(p?.code ?? "", p?.message ?? ""));
       useRoomStore.getState().clearError();
     };
     socket.on("room:created", onCreated as never);
     socket.on("room:error", onError as never);
+    console.debug("[solace:FE] room:create emit", { displayName: name, hasAvatar: !!avatar });
     socket.emit("room:create", { displayName: name, avatar });
   };
 
