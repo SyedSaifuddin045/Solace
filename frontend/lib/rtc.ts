@@ -122,28 +122,59 @@ export function initRtc(): void {
     "connect",
   ]);
   socket.on("rtc:offer", async (p: { from: string; sdp: RTCSessionDescription }) => {
-    const pc = getPeer(p.from);
-    console.debug("[solace:FE] rtc offer received", { me, from: p.from, hasSdp: !!p.sdp });
-    await pc.setRemoteDescription(new RTCSessionDescription(p.sdp));
-    console.debug("[solace:FE] rtc remote description set", { me, from: p.from, type: "offer" });
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    console.debug("[solace:FE] rtc answer created", { me, to: p.from, hasSdp: !!pc.localDescription });
-    socket.emit("rtc:answer", { to: p.from, sdp: pc.localDescription });
+    try {
+      const pc = getPeer(p.from);
+      console.debug("[solace:FE] rtc offer received", { me, from: p.from, hasSdp: !!p.sdp, state: pc.signalingState });
+      if (pc.signalingState === "have-local-offer") {
+        try {
+          await pc.setLocalDescription({ type: "rollback" });
+        } catch (e) {
+          console.debug("[solace:FE] rtc offer rollback unsupported, skipping", { me, from: p.from, name: (e as DOMException)?.name });
+          return;
+        }
+      } else if (pc.signalingState === "have-remote-offer") {
+        console.debug("[solace:FE] rtc offer duplicate ignored", { me, from: p.from, state: pc.signalingState });
+        return;
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription(p.sdp));
+      console.debug("[solace:FE] rtc remote description set", { me, from: p.from, type: "offer" });
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      console.debug("[solace:FE] rtc answer created", { me, to: p.from, hasSdp: !!pc.localDescription });
+      socket.emit("rtc:answer", { to: p.from, sdp: pc.localDescription });
+    } catch (err) {
+      const e = err as DOMException;
+      console.debug("[solace:FE] rtc offer handler error", { me, from: p.from, name: e?.name, message: e?.message });
+    }
   });
   socket.on("rtc:answer", async (p: { from: string; sdp: RTCSessionDescription }) => {
-    const pc = peers.get(p.from);
-    console.debug("[solace:FE] rtc answer received", { me, from: p.from, hasLocalRemoteDescription: pc?.remoteDescription !== null && pc?.remoteDescription !== undefined });
-    if (pc && pc.signalingState === "have-local-offer") {
-      await pc.setRemoteDescription(new RTCSessionDescription(p.sdp));
-      console.debug("[solace:FE] rtc remote description set", { me, from: p.from, type: "answer" });
+    try {
+      const pc = peers.get(p.from);
+      console.debug("[solace:FE] rtc answer received", { me, from: p.from, hasLocalRemoteDescription: pc?.remoteDescription !== null && pc?.remoteDescription !== undefined });
+      if (pc && pc.signalingState === "have-local-offer") {
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(p.sdp));
+          console.debug("[solace:FE] rtc remote description set", { me, from: p.from, type: "answer" });
+        } catch (err) {
+          const e = err as DOMException;
+          console.debug("[solace:FE] rtc answer setRemoteDescription failed", { me, from: p.from, name: e?.name, state: pc.signalingState });
+        }
+      }
+    } catch (err) {
+      const e = err as DOMException;
+      console.debug("[solace:FE] rtc answer handler error", { me, from: p.from, name: e?.name, message: e?.message });
     }
   });
   socket.on("rtc:ice", async (p: { from: string; candidate: RTCIceCandidateInit }) => {
-    const pc = peers.get(p.from);
-    console.debug("[solace:FE] rtc ice received", { me, from: p.from, hasPeer: !!pc });
-    if (pc) await pc.addIceCandidate(new RTCIceCandidate(p.candidate)).catch(() => {});
-    console.debug("[solace:FE] rtc ice candidate add", { me, from: p.from });
+    try {
+      const pc = peers.get(p.from);
+      console.debug("[solace:FE] rtc ice received", { me, from: p.from, hasPeer: !!pc });
+      if (pc) await pc.addIceCandidate(new RTCIceCandidate(p.candidate)).catch(() => {});
+      console.debug("[solace:FE] rtc ice candidate add", { me, from: p.from });
+    } catch (err) {
+      const e = err as DOMException;
+      console.debug("[solace:FE] rtc ice handler error", { me, from: p.from, name: e?.name, message: e?.message });
+    }
   });
   socket.on("room:member_left", (p: { socketId: string }) => {
     console.debug("[solace:FE] rtc room:member_left cleanup", { me, left: p.socketId });
