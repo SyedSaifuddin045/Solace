@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
-import { Mic, MicOff, Video, VideoOff, Settings, MessageSquare, Info, Image as ImageIcon } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, Settings, MessageSquare, Info, Image as ImageIcon, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useRoomStore } from "@/lib/store";
+import { getSocket } from "@/lib/socket";
 import { startRtc } from "@/lib/rtc";
 import { ChatPanel } from "@/components/panels/ChatPanel";
 import { InfoPanel } from "@/components/panels/InfoPanel";
@@ -30,6 +32,7 @@ export function ControlsCluster() {
   const [overlay, setOverlay] = useState<Overlay>("none");
   const audioOn = useRoomStore((s) => s.audioOnLocal);
   const videoOn = useRoomStore((s) => s.videoOnLocal);
+  const router = useRouter();
 
   const toggleMedia = (kind: "audio" | "video") => {
     const nextAudio = kind === "audio" ? !audioOn : audioOn;
@@ -72,6 +75,17 @@ export function ControlsCluster() {
             {videoOn ? <Video size={14} strokeWidth={1.8} /> : <VideoOff size={14} strokeWidth={1.8} />}
           </IconBtn>
         </div>
+        <button
+          aria-label="Leave room"
+          onClick={() => {
+            getSocket().emit("room:leave");
+            useRoomStore.getState().reset();
+            router.replace("/");
+          }}
+          className="glass rounded-full p-1.5 grid place-items-center"
+        >
+          <LogOut size={14} strokeWidth={1.8} style={{ color: "var(--accent-bone)" }} />
+        </button>
         <div className="glass rounded-full p-1.5 flex items-center gap-1.5">
           <IconBtn label="Wallpaper scene" onClick={() => setOverlay("wallpaper")} active={overlay === "wallpaper"}><ImageIcon size={14} strokeWidth={1.8} /></IconBtn>
           <IconBtn label="Theme" onClick={() => setOverlay("theme")} active={overlay === "theme"}><Settings size={14} strokeWidth={1.8} /></IconBtn>
