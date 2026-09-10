@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useRoomStore, type Member } from "@/lib/store";
 
-beforeEach(() => useRoomStore.setState({ roomId: null, members: [], error: null, connected: false, state: {
+beforeEach(() => useRoomStore.setState({ roomId: null, members: [], error: null, connected: false, pendingTimerMinutes: null, state: {
   playback: { status: "paused", track: null, position: 0, updatedAt: 0 },
   wallpaper: { url: null, kind: "image", changedBy: null, updatedAt: 0 },
   wallpapers: [],
@@ -79,5 +79,25 @@ describe("applyEvent — incremental events", () => {
   });
   it("unknown events are ignored safely", () => {
     expect(() => useRoomStore.getState().applyEvent("something:else", {})).not.toThrow();
+  });
+});
+
+describe("armTimer + pendingTimerMinutes", () => {
+  it("armTimer sets pendingTimerMinutes", () => {
+    useRoomStore.getState().armTimer(25);
+    expect(useRoomStore.getState().pendingTimerMinutes).toBe(25);
+  });
+  it("armTimer(null) clears pendingTimerMinutes", () => {
+    useRoomStore.getState().armTimer(45);
+    useRoomStore.getState().armTimer(null);
+    expect(useRoomStore.getState().pendingTimerMinutes).toBeNull();
+  });
+});
+
+describe("reset clears pendingTimerMinutes", () => {
+  it("reset sets pendingTimerMinutes to null", () => {
+    useRoomStore.getState().armTimer(60);
+    useRoomStore.getState().reset();
+    expect(useRoomStore.getState().pendingTimerMinutes).toBeNull();
   });
 });

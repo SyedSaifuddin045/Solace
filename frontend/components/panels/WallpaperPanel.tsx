@@ -4,6 +4,7 @@ import { Upload, Volume2, VolumeX, X, Video } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { uploadWallpaper, resolveAssetUrl } from "@/lib/upload";
+import { isGradientUrl, gradientCss, GRADIENTS, GRADIENT_PREFIX } from "@/lib/wallpaper";
 import { pushToast } from "@/components/room/ToastStack";
 
 export function WallpaperPanel({ onClose }: { onClose: () => void }) {
@@ -53,6 +54,11 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
 
   const specials = [
     { url: null, kind: "image" as const, title: "default dusk" },
+    ...GRADIENTS.map((g) => ({
+      url: `${GRADIENT_PREFIX}${g.id}`,
+      kind: "image" as const,
+      title: g.label,
+    })),
   ];
 
   return (
@@ -115,7 +121,9 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
 }
 
 function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick: () => void; kind: "image" | "video"; label: string; url: string | null }) {
-  const src = resolveAssetUrl(url);
+  const isGrad = isGradientUrl(url);
+  const gradCss = isGrad ? gradientCss(url) : null;
+  const src = isGrad ? null : resolveAssetUrl(url);
   return (
     <button
       onClick={onClick}
@@ -125,10 +133,12 @@ function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick:
         background: "var(--depth-2)",
       }}
     >
-      {src && kind === "image" && <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" />}
-      {src && kind === "video" && <video src={src} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />}
+      {isGrad && gradCss && <div className="absolute inset-0 w-full h-full" style={{ background: gradCss }} />}
+      {isGrad && !gradCss && <div className="absolute inset-0 w-full h-full wallpaper" />}
+      {!isGrad && src && kind === "image" && <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+      {!isGrad && src && kind === "video" && <video src={src} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />}
       <span className="absolute bottom-1 left-1 max-w-[calc(100%-8px)] text-[9px] opacity-80 px-1 text-left truncate z-10" style={{ background: "rgba(20,17,15,0.6)", borderRadius: 4 }}>{label}</span>
-      {kind === "video" && (
+      {kind === "video" && !isGrad && (
         <span className="absolute top-1 left-1 text-[7px] opacity-70 flex items-center gap-0.5 z-10"><Video size={8} /> video</span>
       )}
     </button>

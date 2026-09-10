@@ -97,6 +97,8 @@ export function JoinScreen() {
       setBusy(null);
       console.debug("[solace:FE] room:created received", { roomId: p?.roomId, memberCount: p?.members?.length, hasState: !!p?.state });
       hydrate(p);
+      sessionStorage.setItem("solace:setup", "1");
+      console.debug("[solace:FE] setup flag set", { roomId: p?.roomId });
       if (p) routeToRoom(p.roomId);
     };
     const onError = (p?: { code: string; message: string }) => {

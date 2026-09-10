@@ -38,11 +38,13 @@ interface RoomStore {
   audioOnLocal: boolean;
   videoOnLocal: boolean;
   remoteStreams: Record<string, MediaStream>;
+  pendingTimerMinutes: number | null;
   setConnected: (v: boolean) => void;
   setSocketId: (id: string | null) => void;
   setSpeaking: (ids: string[]) => void;
   setLocalMedia: (audioOn: boolean, videoOn: boolean) => void;
   setRemoteStream: (socketId: string, stream: MediaStream | null) => void;
+  armTimer: (minutes: number | null) => void;
   clearError: () => void;
   reset: () => void;
   applyEvent: (name: string, payload: unknown) => void;
@@ -86,6 +88,7 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   audioOnLocal: false,
   videoOnLocal: false,
   remoteStreams: {},
+  pendingTimerMinutes: null,
   setConnected: (v) => set({ connected: v }),
   setSocketId: (id) => set({ socketId: id }),
   setSpeaking: (ids) => set({ speaking: ids }),
@@ -97,8 +100,9 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
       else delete remoteStreams[socketId];
       return { remoteStreams };
     }),
+  armTimer: (minutes) => set({ pendingTimerMinutes: minutes }),
   clearError: () => set({ error: null }),
-  reset: () => set({ roomId: null, members: [], state: EMPTY_STATE, error: null, speaking: [], audioOnLocal: false, videoOnLocal: false, remoteStreams: {} }),
+  reset: () => set({ roomId: null, members: [], state: EMPTY_STATE, error: null, speaking: [], audioOnLocal: false, videoOnLocal: false, remoteStreams: {}, pendingTimerMinutes: null }),
 
   applyEvent: (name, payload) => {
     const s = get();

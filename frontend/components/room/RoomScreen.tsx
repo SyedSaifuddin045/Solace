@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ChromeReveal } from "@/components/room/ChromeReveal";
 import { TitleChip } from "@/components/room/TitleChip";
@@ -10,11 +10,13 @@ import { TimerCenter } from "@/components/room/TimerCenter";
 import { ToastStack } from "@/components/room/ToastStack";
 import { ReconnectOverlay } from "@/components/room/ReconnectOverlay";
 import { ErrorPage } from "@/components/room/ErrorPage";
+import { RoomSetupOverlay } from "@/components/room/RoomSetupOverlay";
 import { getSocket } from "@/lib/socket";
 import { useRoomStore } from "@/lib/store";
 import { loadPrefs } from "@/lib/prefs";
 import { initRtc, startSpeakingDetection } from "@/lib/rtc";
 import { resolveAssetUrl } from "@/lib/upload";
+import { isGradientUrl, gradientCss } from "@/lib/wallpaper";
 
 export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const params = useParams<{ roomId: string }>();
@@ -23,6 +25,23 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const state = useRoomStore((s) => s.state);
   const connected = useRoomStore((s) => s.connected);
   const error = useRoomStore((s) => s.error);
+
+  const [setupVisible, setSetupVisible] = useState(false);
+
+  useEffect(() => {
+    // client-only mount check per spec: show setup overlay before entering
+    if (typeof window !== "undefined" && sessionStorage.getItem("solace:setup") === "1") {
+      console.debug("[solace:FE] RoomScreen setup flag detected");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSetupVisible(true);
+    }
+  }, []);
+
+  const handleSetupEnter = () => {
+    sessionStorage.removeItem("solace:setup");
+    console.debug("[solace:FE] RoomScreen setup completed");
+    setSetupVisible(false);
+  };
 
   useEffect(() => {
     const socket = getSocket();
@@ -94,7 +113,16 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
     <main className="relative min-h-screen overflow-hidden">
       {/* wallpaper layer — full bleed */}
       <div className="absolute inset-0">
-        {wallpaper.url ? (
+        {isGradientUrl(wallpaper.url) ? (
+          (() => {
+            const css = gradientCss(wallpaper.url);
+            return css ? (
+              <div className="w-full h-full" style={{ background: css }} />
+            ) : (
+              <div className="wallpaper w-full h-full" />
+            );
+          })()
+        ) : wallpaper.url ? (
           wallpaper.kind === "video" ? (
             <video src={resolveAssetUrl(wallpaper.url) ?? undefined} muted loop playsInline autoPlay className="w-full h-full object-cover" />
           ) : (
@@ -119,6 +147,9 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
       {/* overlays */}
       <ReconnectOverlay visible={!connected} />
+
+      {/* setup overlay */}
+      {setupVisible && <RoomSetupOverlay onEnter={handleSetupEnter} />}
     </main>
   );
 }
