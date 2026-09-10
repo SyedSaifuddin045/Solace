@@ -171,6 +171,10 @@ export function startSpeakingDetection(): void {
     const s = useRoomStore.getState();
     const talking: string[] = [];
     Object.entries(s.remoteStreams).forEach(([id, stream]) => {
+      if (stream.getAudioTracks().length === 0) {
+        analysers.delete(id);
+        return;
+      }
       let an = analysers.get(id);
       if (!an) {
         const src = ctx.createMediaStreamSource(stream);
