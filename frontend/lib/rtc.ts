@@ -134,7 +134,7 @@ export function initRtc(): void {
   socket.on("rtc:answer", async (p: { from: string; sdp: RTCSessionDescription }) => {
     const pc = peers.get(p.from);
     console.debug("[solace:FE] rtc answer received", { me, from: p.from, hasLocalRemoteDescription: pc?.remoteDescription !== null && pc?.remoteDescription !== undefined });
-    if (pc && pc.remoteDescription === null) {
+    if (pc && pc.signalingState === "have-local-offer") {
       await pc.setRemoteDescription(new RTCSessionDescription(p.sdp));
       console.debug("[solace:FE] rtc remote description set", { me, from: p.from, type: "answer" });
     }
