@@ -13,32 +13,53 @@ function createUploadRouter(roomService) {
 
     router.get("/uploads/:roomId/:file", (req, res) => {
         const ext = "." + req.params.file.split(".").pop();
+        console.log("[solace:BE] upload GET serve", { roomId: req.params.roomId, filename: req.params.file, ext, contentType: store.contentTypeOf(ext) });
         res.set("Cache-Control", "public, max-age=31536000, immutable");
         res.set("Content-Type", store.contentTypeOf(ext));
         res.sendFile(path.join(req.params.roomId, req.params.file), { root: store.root }, (err) => {
-            if (err) res.status(404).json({ error: "NOT_FOUND" });
+            if (err) {
+                console.log("[solace:BE] upload GET 404", { roomId: req.params.roomId, filename: req.params.file });
+                res.status(404).json({ error: "NOT_FOUND" });
+            }
         });
     });
 
     router.post("/uploads", upload.single("file"), (req, res) => {
         const { roomId } = req.body;
         const file = req.file;
-        if (!file) return res.status(400).json({ error: "MISSING_FILE" });
+        console.log("[solace:BE] upload POST received", {
+            roomId,
+            originalname: file && file.originalname,
+            size: file && file.size,
+            mimetype: file && file.mimetype
+        });
+        if (!file) {
+            console.log("[solace:BE] upload POST MISSING_FILE", { roomId });
+            return res.status(400).json({ error: "MISSING_FILE" });
+        }
         let room;
         try {
             room = roomService.getRoom(roomId);
         } catch (err) {
-            if (err && err.code === "ROOM_NOT_FOUND") return res.status(404).json({ error: err.code });
+            if (err && err.code === "ROOM_NOT_FOUND") {
+                console.log("[solace:BE] upload POST ROOM_NOT_FOUND", { roomId });
+                return res.status(404).json({ error: err.code });
+            }
             throw err;
         }
         let meta;
         try {
             meta = store.buildMeta(roomId, file.originalname, file.buffer, file.size, "upload", Date.now());
         } catch (err) {
-            if (err instanceof UnsupportedMediaError) return res.status(415).json({ error: err.code });
+            if (err instanceof UnsupportedMediaError) {
+                console.log("[solace:BE] upload POST UNSUPPORTED_MEDIA_TYPE", { roomId, originalname: file.originalname });
+                return res.status(415).json({ error: err.code });
+            }
             throw err;
         }
+        console.log("[solace:BE] upload POST magic-type result", { roomId, url: meta.url, kind: meta.kind, contentType: meta.contentType });
         const { room: updatedRoom, uploads, evicted } = roomService.addUpload(roomId, meta);
+        console.log("[solace:BE] upload POST addUpload result", { roomId, uploadsLength: uploads.length, evicted: evicted ? evicted.url : null });
         if (evicted) store.deleteByUrl(evicted.url);
         const io = req.app.get("socketServer");
         if (io) {
@@ -49,6 +70,7 @@ function createUploadRouter(roomService) {
             io.to(roomId).emit(SERVER.ROOM_ACTIVITY, { entry });
         }
         res.status(201).json({ id: meta.id, url: meta.url, kind: meta.kind, size: meta.size });
+        console.log("[solace:BE] upload POST response", { status: 201, id: meta.id, url: meta.url, kind: meta.kind, size: meta.size });
     });
 
     router.use((err, req, res, next) => {

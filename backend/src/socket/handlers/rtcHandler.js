@@ -26,6 +26,11 @@ function createRtcHandler(io, roomService) {
     }
 
     function relay(eventName, socket, payload, field) {
+        console.log("[solace:BE] rtc relay received", {
+            from: socket.id,
+            event: eventName,
+            payloadKeys: Object.keys(payload || {})
+        });
         const fromRoom = roomService.resolveRoomBySocket(socket.id);
         if (!fromRoom) {
             emitError(socket, new NotInRoomError());
@@ -42,6 +47,7 @@ function createRtcHandler(io, roomService) {
             return;
         }
         const envelope = { from: socket.id, [field]: data };
+        console.log("[solace:BE] rtc relay emit", { event: eventName, from: socket.id, to, roomId: fromRoom.id });
         io.to(to).emit(eventName, envelope);
     }
 
@@ -55,7 +61,9 @@ function createRtcHandler(io, roomService) {
                 }
                 const audio = payload && payload.audio;
                 const video = payload && payload.video;
+                console.log("[solace:BE] rtc:media received", { from: socket.id, roomId: room.id, payload: { audio, video } });
                 const member = roomService.setMedia(room.id, socket.id, { audio, video });
+                console.log("[solace:BE] rtc:media applied flags", { from: socket.id, roomId: room.id, audioOn: member.audioOn, videoOn: member.videoOn });
                 io.to(room.id).emit(SERVER.RTC_MEDIA_STATE, {
                     socketId: socket.id,
                     audio: member.audioOn,
