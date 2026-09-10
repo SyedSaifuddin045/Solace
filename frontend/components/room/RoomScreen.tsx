@@ -14,6 +14,7 @@ import { getSocket } from "@/lib/socket";
 import { useRoomStore } from "@/lib/store";
 import { loadPrefs } from "@/lib/prefs";
 import { initRtc, startSpeakingDetection } from "@/lib/rtc";
+import { resolveAssetUrl } from "@/lib/upload";
 
 export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const params = useParams<{ roomId: string }>();
@@ -95,9 +96,9 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       <div className="absolute inset-0">
         {wallpaper.url ? (
           wallpaper.kind === "video" ? (
-            <video src={wallpaper.url} muted loop playsInline autoPlay className="w-full h-full object-cover" />
+            <video src={resolveAssetUrl(wallpaper.url) ?? undefined} muted loop playsInline autoPlay className="w-full h-full object-cover" />
           ) : (
-            <img src={wallpaper.url} alt="" className="w-full h-full object-cover" />
+            <img src={resolveAssetUrl(wallpaper.url) ?? undefined} alt="" className="w-full h-full object-cover" />
           )
         ) : (
           <div className="wallpaper w-full h-full" />

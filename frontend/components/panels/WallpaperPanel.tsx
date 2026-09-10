@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Upload, Volume2, VolumeX, X, Video } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
-import { uploadWallpaper } from "@/lib/upload";
+import { uploadWallpaper, resolveAssetUrl } from "@/lib/upload";
 import { pushToast } from "@/components/room/ToastStack";
 
 export function WallpaperPanel({ onClose }: { onClose: () => void }) {
@@ -115,6 +115,7 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
 }
 
 function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick: () => void; kind: "image" | "video"; label: string; url: string | null }) {
+  const src = resolveAssetUrl(url);
   return (
     <button
       onClick={onClick}
@@ -124,8 +125,8 @@ function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick:
         background: "var(--depth-2)",
       }}
     >
-      {url && kind === "image" && <img src={url} alt="" className="absolute inset-0 w-full h-full object-cover" />}
-      {url && kind === "video" && <video src={url} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />}
+      {src && kind === "image" && <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+      {src && kind === "video" && <video src={src} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />}
       <span className="absolute bottom-1 left-1 max-w-[calc(100%-8px)] text-[9px] opacity-80 px-1 text-left truncate z-10" style={{ background: "rgba(20,17,15,0.6)", borderRadius: 4 }}>{label}</span>
       {kind === "video" && (
         <span className="absolute top-1 left-1 text-[7px] opacity-70 flex items-center gap-0.5 z-10"><Video size={8} /> video</span>
