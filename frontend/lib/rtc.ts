@@ -59,6 +59,16 @@ export async function startRtc({ audio, video }: { audio: boolean; video: boolea
     return;
   }
 
+  // Idempotent: skip if requested flags match current localStream
+  if (localStream) {
+    const hasAudio = localStream.getAudioTracks().length > 0;
+    const hasVideo = localStream.getVideoTracks().length > 0;
+    if (hasAudio === audio && hasVideo === video) {
+      console.debug("[solace:FE] rtc startRtc idempotent skip", { me, audio, video });
+      return;
+    }
+  }
+
   const constraints = { audio, video: video ? { width: { ideal: 640 }, height: { ideal: 480 } } : false };
   console.debug("[solace:FE] rtc getUserMedia START", { me, constraints });
   try {
@@ -75,8 +85,28 @@ export async function startRtc({ audio, video }: { audio: boolean; video: boolea
   });
   s.setLocalMedia(audio, video);
   socket.emit("rtc:media", { audio, video });
+  // Swap tracks on existing peers and renegotiate
+  for (const [socketId, pc] of peers) {
+    pc.getSenders().forEach((sender) => {
+      if (sender.track) {
+        console.debug("[solace:FE] rtc removeTrack", { me, to: socketId, kind: sender.track.kind });
+        pc.removeTrack(sender);
+      }
+    });
+    localStream!.getTracks().forEach((t) => {
+      console.debug("[solace:FE] rtc addTrack", { me, to: socketId, kind: t.kind });
+      pc.addTrack(t, localStream!);
+    });
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    console.debug("[solace:FE] rtc renegotiate offer", { me, to: socketId, hasSdp: !!pc.localDescription });
+    getSocket().emit("rtc:offer", { to: socketId, sdp: pc.localDescription });
+  }
+  // Create offers to any new members not yet peer'd
   await Promise.all(
-    s.members.filter((m: Member) => m.socketId !== me).map((m: Member) => offerTo(m.socketId))
+    s.members
+      .filter((m: Member) => m.socketId !== me && !peers.has(m.socketId))
+      .map((m: Member) => offerTo(m.socketId))
   );
 }
 
