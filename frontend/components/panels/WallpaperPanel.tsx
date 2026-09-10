@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Upload, Volume2, VolumeX, X, Video } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
@@ -14,17 +14,37 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
   const [mutedVideos, setMutedVideos] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    console.debug("[solace:FE] WallpaperPanel open", { roomId, wallpapersCount: wallpapers.length, currentUrl: current.url });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const prevCount = useRef(wallpapers.length);
+  useEffect(() => {
+    if (prevCount.current !== wallpapers.length) {
+      console.debug("[solace:FE] WallpaperPanel wallpapers count change", {
+        before: prevCount.current,
+        after: wallpapers.length,
+      });
+      prevCount.current = wallpapers.length;
+    }
+  }, [wallpapers.length]);
+
   const setScene = (url: string | null, kind: "image" | "video") => {
+    console.debug("[solace:FE] wallpaper:set emit", { url: url?.slice(0, 120), kind });
     getSocket().emit("wallpaper:set", { url, kind });
   };
 
   const doUpload = async (file: File) => {
     if (!roomId) return;
+    console.debug("[solace:FE] wallpaper upload START", { roomId, name: file.name, size: file.size, type: file.type });
     setBusy(true);
     try {
       const up = await uploadWallpaper(roomId, file);
+      console.debug("[solace:FE] wallpaper upload SUCCESS", { url: up.url, kind: up.kind, size: up.size });
       getSocket().emit("wallpaper:set", { url: up.url, kind: up.kind });
     } catch (e) {
+      console.debug("[solace:FE] wallpaper upload ERROR", { message: (e as Error).message });
       pushToast((e as Error).message, "err");
     } finally {
       setBusy(false);
@@ -45,7 +65,7 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
       <p className="text-[10px] opacity-50 mb-1.5">room library — max 3 uploads</p>
       <div className="grid grid-cols-3 gap-2 overflow-y-auto flex-1 content-start">
         {specials.map((sp) => (
-          <Tile key={sp.title} active={!current.url} onClick={() => setScene(sp.url, sp.kind)} label={sp.title} kind={sp.kind} />
+          <Tile key={sp.title} active={!current.url} onClick={() => setScene(sp.url, sp.kind)} label={sp.title} kind={sp.kind} url={null} />
         ))}
         {wallpapers.map((w) => (
           <div key={w.id} className="relative group">
@@ -54,6 +74,7 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
               onClick={() => setScene(w.url, w.kind)}
               kind={w.kind}
               label={w.originalName}
+              url={w.url}
             />
             {w.kind === "video" && (
               <button
@@ -93,7 +114,7 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Tile({ active, onClick, kind, label }: { active: boolean; onClick: () => void; kind: "image" | "video"; label: string }) {
+function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick: () => void; kind: "image" | "video"; label: string; url: string | null }) {
   return (
     <button
       onClick={onClick}
@@ -103,9 +124,11 @@ function Tile({ active, onClick, kind, label }: { active: boolean; onClick: () =
         background: "var(--depth-2)",
       }}
     >
-      <span className="absolute inset-0 grid place-items-center text-[9px] opacity-60 px-1 text-center truncate">{label}</span>
+      {url && kind === "image" && <img src={url} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+      {url && kind === "video" && <video src={url} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />}
+      <span className="absolute bottom-1 left-1 max-w-[calc(100%-8px)] text-[9px] opacity-80 px-1 text-left truncate z-10" style={{ background: "rgba(20,17,15,0.6)", borderRadius: 4 }}>{label}</span>
       {kind === "video" && (
-        <span className="absolute bottom-1 left-1 text-[7px] opacity-70 flex items-center gap-0.5"><Video size={8} /> video</span>
+        <span className="absolute top-1 left-1 text-[7px] opacity-70 flex items-center gap-0.5 z-10"><Video size={8} /> video</span>
       )}
     </button>
   );
