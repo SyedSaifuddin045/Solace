@@ -9,8 +9,8 @@ interface ClockDialProps {
 
 const PRESETS = [15, 25, 45, 60, 90];
 const MINUTES = 180;
-const CX = 110;
-const CY = 110;
+const CX = 120;
+const CY = 120;
 const RING_R = 95;
 
 const minutesToAngle = (m: number) => (m / MINUTES) * 2 * Math.PI;
@@ -38,7 +38,7 @@ export function ClockDial({ value, onChange, label }: ClockDialProps) {
       const svg = svgRef.current;
       if (!svg) return;
       const rect = svg.getBoundingClientRect();
-      const scale = 220 / rect.width;
+      const scale = 240 / rect.width;
       const dx = (e.clientX - rect.left) * scale - CX;
       const dy = (e.clientY - rect.top) * scale - CY;
       let a = Math.atan2(dx, -dy);
@@ -87,7 +87,7 @@ export function ClockDial({ value, onChange, label }: ClockDialProps) {
       )}
       <svg
         ref={svgRef}
-        viewBox="0 0 220 220"
+        viewBox="0 0 240 240"
         className="select-none touch-none"
         style={{ width: "100%", maxWidth: 220 }}
         onPointerDown={onPointerDown}
