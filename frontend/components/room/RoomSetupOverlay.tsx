@@ -135,7 +135,7 @@ export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
         <div className="mb-6">
           <label className="text-[10px] opacity-50 uppercase tracking-widest">timer</label>
           {timerDialOpen ? (
-            <div className="mt-2 relative" style={{ width: 220, height: 240 }}>
+            <div className="mt-2 relative mx-auto" style={{ width: 220, height: 240 }}>
               <ClockDial
                 value={timerDialValue}
                 onChange={setTimerDialValue}
