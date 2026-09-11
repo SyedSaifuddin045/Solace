@@ -21,5 +21,7 @@ export async function uploadWallpaper(
   const res = await fetch(`${BACKEND_URL}/uploads`, { method: "POST", body });
   if (!res.ok) throw new Error(httpUploadError(res.status));
   const parsed = (await res.json()) as { id: string; url: string; kind: WallpaperKind; size: number };
-  return { ...parsed, url: resolveAssetUrl(parsed.url)! };
+  // Return raw (relative) URL — callers wrap with resolveAssetUrl() only for rendering.
+  // The canonical URL stored in state must match what the server broadcasts in wallpaper:uploads.
+  return { ...parsed, url: parsed.url };
 }
