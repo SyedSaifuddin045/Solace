@@ -174,7 +174,7 @@ export function ClockDial({ value, onChange, label }: ClockDialProps) {
         <circle cx={CX} cy={CY} r={3} fill="var(--accent-amber)" fillOpacity={0.6} />
 
         <defs>
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+          <filter id="glow" filterUnits="userSpaceOnUse" x={CX - RING_R - 20} y={CY - RING_R - 20} width={RING_R * 2 + 40} height={RING_R * 2 + 40}>
             <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="var(--accent-amber)" floodOpacity="1" />
           </filter>
         </defs>
