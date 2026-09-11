@@ -1,15 +1,27 @@
 import { getSocket, onRtcConfig } from "@/lib/socket";
-import { useRoomStore, type Member } from "@/lib/store";
+import { useRoomStore } from "@/lib/store";
+
+type Kind = "audio" | "video";
 
 let localStream: MediaStream | null = null;
 let me: string | null = null;
 let inited = false;
 const peers = new Map<string, RTCPeerConnection>();
+const senders = new Map<RTCPeerConnection, Partial<Record<Kind, RTCRtpSender>>>();
+const negotiationChains = new WeakMap<RTCPeerConnection, Promise<void>>();
+const pendingNegotiation = new Set<RTCPeerConnection>();
 let iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 
 onRtcConfig((cfg) => {
   if (cfg?.iceServers?.length) iceServers = cfg.iceServers;
 });
+
+function currentKinds(): { audio: boolean; video: boolean } {
+  return {
+    audio: (localStream?.getAudioTracks().length ?? 0) > 0,
+    video: (localStream?.getVideoTracks().length ?? 0) > 0,
+  };
+}
 
 function getPeer(socketId: string): RTCPeerConnection {
   let pc = peers.get(socketId);
@@ -29,85 +41,172 @@ function getPeer(socketId: string): RTCPeerConnection {
     console.debug("[solace:FE] rtc ontrack", { me, from: socketId, videoTracks, audioTracks, trackKind: e.track.kind });
     useRoomStore.getState().setRemoteStream(socketId, stream);
   };
-  localStream?.getTracks().forEach((t) => {
-    console.debug("[solace:FE] rtc addTrack", { me, to: socketId, kind: t.kind });
-    pc!.addTrack(t, localStream!);
-  });
+  const map: Partial<Record<Kind, RTCRtpSender>> = {};
+  senders.set(pc, map);
+  const stream = localStream;
+  if (stream) {
+    stream.getTracks().forEach((t) => {
+      if (t.kind !== "audio" && t.kind !== "video") return;
+      console.debug("[solace:FE] rtc addTrack", { me, to: socketId, kind: t.kind });
+      map[t.kind] = pc!.addTrack(t, stream);
+    });
+  }
   peers.set(socketId, pc);
   return pc;
 }
 
-async function offerTo(socketId: string) {
-  const pc = getPeer(socketId);
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  console.debug("[solace:FE] rtc offer created", { me, to: socketId, hasSdp: !!pc.localDescription });
-  getSocket().emit("rtc:offer", { to: socketId, sdp: pc.localDescription });
-}
-
-export async function startRtc({ audio, video }: { audio: boolean; video: boolean }): Promise<void> {
-  const socket = getSocket();
-  const s = useRoomStore.getState();
-  if (!audio && !video) {
-    console.debug("[solace:FE] rtc startRtc off-path", { me, audio, video, peers: peers.size, hadLocalStream: !!localStream });
-    localStream?.getTracks().forEach((t) => t.stop());
-    localStream = null;
-    peers.forEach((pc) => pc.close());
-    peers.clear();
-    s.setLocalMedia(false, false);
-    socket.emit("rtc:media", { audio: false, video: false });
+async function enableKind(kind: Kind): Promise<void> {
+  if (localStream?.getTracks().some((t) => t.kind === kind)) {
+    console.debug("[solace:FE] rtc track on (reuse)", { me, kind });
     return;
   }
-
-  // Idempotent: skip if requested flags match current localStream
-  if (localStream) {
-    const hasAudio = localStream.getAudioTracks().length > 0;
-    const hasVideo = localStream.getVideoTracks().length > 0;
-    if (hasAudio === audio && hasVideo === video) {
-      console.debug("[solace:FE] rtc startRtc idempotent skip", { me, audio, video });
-      return;
-    }
-  }
-
-  const constraints = { audio, video: video ? { width: { ideal: 640 }, height: { ideal: 480 } } : false };
-  console.debug("[solace:FE] rtc getUserMedia START", { me, constraints });
+  const constraints: MediaStreamConstraints = {
+    audio: kind === "audio",
+    video: kind === "video" ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
+  };
+  console.debug("[solace:FE] rtc getUserMedia START", { me, kind, constraints });
   try {
-    localStream = await navigator.mediaDevices.getUserMedia(constraints as MediaStreamConstraints);
+    const fresh = await navigator.mediaDevices.getUserMedia(constraints);
+    if (!localStream) localStream = new MediaStream();
+    fresh.getTracks().forEach((t) => localStream!.addTrack(t));
+    console.debug("[solace:FE] rtc getUserMedia SUCCESS", {
+      me,
+      kind,
+      videoTracks: fresh.getVideoTracks().length,
+      audioTracks: fresh.getAudioTracks().length,
+    });
+    console.debug("[solace:FE] rtc track on", { me, kind, tracks: fresh.getTracks().length });
   } catch (err) {
     const e = err as DOMException;
-    console.debug("[solace:FE] rtc getUserMedia FAILURE", { me, name: e?.name, message: e?.message });
+    console.debug("[solace:FE] rtc getUserMedia FAILURE", { me, kind, name: e?.name, message: e?.message });
     throw err;
   }
-  console.debug("[solace:FE] rtc getUserMedia SUCCESS", {
-    me,
-    videoTracks: localStream.getVideoTracks().length,
-    audioTracks: localStream.getAudioTracks().length,
+}
+
+function disableKind(kind: Kind): void {
+  if (!localStream) return;
+  const tracks = kind === "audio" ? localStream.getAudioTracks() : localStream.getVideoTracks();
+  tracks.forEach((t) => {
+    console.debug("[solace:FE] rtc track off", { me, kind });
+    t.stop();
+    localStream!.removeTrack(t);
   });
+}
+
+async function reconcilePeer(
+  socketId: string,
+  pc: RTCPeerConnection,
+  desired: { audio: boolean; video: boolean }
+): Promise<void> {
+  const map = senders.get(pc) ?? {};
+  senders.set(pc, map);
+  const stream = localStream;
+  let added = 0;
+  let replaced = 0;
+  let nulled = 0;
+  let needsNegotiation = false;
+  for (const kind of ["audio", "video"] as const) {
+    const want = desired[kind];
+    const existing = map[kind];
+    const track = stream?.getTracks().find((t) => t.kind === kind) ?? null;
+    if (want && track && stream) {
+      if (existing) {
+        if (existing.track !== track) {
+          await existing.replaceTrack(track);
+          replaced++;
+        }
+      } else {
+        map[kind] = pc.addTrack(track, stream);
+        added++;
+        needsNegotiation = true;
+      }
+    } else if (!want && existing) {
+      await existing.replaceTrack(null);
+      nulled++;
+    }
+  }
+  console.debug("[solace:FE] rtc reconcile", { me, to: socketId, added, replaced, nulled });
+  if (needsNegotiation) void negotiate(pc, socketId);
+}
+
+function negotiate(pc: RTCPeerConnection, socketId: string): Promise<void> {
+  const prev = negotiationChains.get(pc) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  negotiationChains.set(pc, prev.then(() => gate));
+  return prev.then(async () => {
+    try {
+      if (pc.signalingState !== "stable") {
+        pendingNegotiation.add(pc);
+        console.debug("[solace:FE] rtc negotiation serialize", { me, to: socketId, state: pc.signalingState });
+        return;
+      }
+      pendingNegotiation.delete(pc);
+      console.debug("[solace:FE] rtc negotiation start", { me, to: socketId });
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      console.debug("[solace:FE] rtc negotiation offer", { me, to: socketId, hasSdp: !!pc.localDescription });
+      getSocket().emit("rtc:offer", { to: socketId, sdp: pc.localDescription });
+    } catch (err) {
+      const e = err as DOMException;
+      console.debug("[solace:FE] rtc negotiation error", {
+        me,
+        to: socketId,
+        name: e?.name,
+        message: e?.message,
+        state: pc.signalingState,
+      });
+    } finally {
+      release();
+    }
+  });
+}
+
+function flushPending(pc: RTCPeerConnection, socketId: string): void {
+  if (pendingNegotiation.has(pc) && pc.signalingState === "stable") {
+    console.debug("[solace:FE] rtc negotiation flush pending", { me, to: socketId });
+    void negotiate(pc, socketId);
+  }
+}
+
+let startRtcChain: Promise<void> = Promise.resolve();
+
+async function startRtcInternal({ audio, video }: { audio: boolean; video: boolean }): Promise<void> {
+  const socket = getSocket();
+  const s = useRoomStore.getState();
+  const cur = currentKinds();
+  if (cur.audio === audio && cur.video === video) {
+    console.debug("[solace:FE] rtc startRtc idempotent skip", { me, audio, video });
+    return;
+  }
+  console.debug("[solace:FE] rtc startRtc", { me, audio, video, peers: peers.size, hadLocalStream: !!localStream });
+
+  if (audio) await enableKind("audio");
+  else disableKind("audio");
+  if (video) await enableKind("video");
+  else disableKind("video");
+
+  const desired = { audio, video };
   s.setLocalMedia(audio, video);
   socket.emit("rtc:media", { audio, video });
-  // Swap tracks on existing peers and renegotiate
+
   for (const [socketId, pc] of peers) {
-    pc.getSenders().forEach((sender) => {
-      if (sender.track) {
-        console.debug("[solace:FE] rtc removeTrack", { me, to: socketId, kind: sender.track.kind });
-        pc.removeTrack(sender);
-      }
-    });
-    localStream!.getTracks().forEach((t) => {
-      console.debug("[solace:FE] rtc addTrack", { me, to: socketId, kind: t.kind });
-      pc.addTrack(t, localStream!);
-    });
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    console.debug("[solace:FE] rtc renegotiate offer", { me, to: socketId, hasSdp: !!pc.localDescription });
-    getSocket().emit("rtc:offer", { to: socketId, sdp: pc.localDescription });
+    await reconcilePeer(socketId, pc, desired);
   }
-  // Create offers to any new members not yet peer'd
-  await Promise.all(
-    s.members
-      .filter((m: Member) => m.socketId !== me && !peers.has(m.socketId))
-      .map((m: Member) => offerTo(m.socketId))
-  );
+  for (const m of s.members) {
+    if (m.socketId === me || peers.has(m.socketId)) continue;
+    const pc = getPeer(m.socketId);
+    await reconcilePeer(m.socketId, pc, desired);
+    if (localStream && localStream.getTracks().length > 0) void negotiate(pc, m.socketId);
+  }
+}
+
+export function startRtc(args: { audio: boolean; video: boolean }): Promise<void> {
+  const run = startRtcChain.then(() => startRtcInternal(args));
+  startRtcChain = run.catch(() => {});
+  return run;
 }
 
 export function initRtc(): void {
@@ -125,16 +224,22 @@ export function initRtc(): void {
     try {
       const pc = getPeer(p.from);
       console.debug("[solace:FE] rtc offer received", { me, from: p.from, hasSdp: !!p.sdp, state: pc.signalingState });
+      if (pc.signalingState === "have-remote-offer") {
+        console.debug("[solace:FE] rtc offer duplicate ignored", { me, from: p.from, state: pc.signalingState });
+        return;
+      }
       if (pc.signalingState === "have-local-offer") {
         try {
           await pc.setLocalDescription({ type: "rollback" });
+          console.debug("[solace:FE] rtc offer rollback", { me, from: p.from, state: pc.signalingState });
         } catch (e) {
-          console.debug("[solace:FE] rtc offer rollback unsupported, skipping", { me, from: p.from, name: (e as DOMException)?.name });
+          console.debug("[solace:FE] rtc offer rollback unsupported, skipping", {
+            me,
+            from: p.from,
+            name: (e as DOMException)?.name,
+          });
           return;
         }
-      } else if (pc.signalingState === "have-remote-offer") {
-        console.debug("[solace:FE] rtc offer duplicate ignored", { me, from: p.from, state: pc.signalingState });
-        return;
       }
       await pc.setRemoteDescription(new RTCSessionDescription(p.sdp));
       console.debug("[solace:FE] rtc remote description set", { me, from: p.from, type: "offer" });
@@ -142,27 +247,30 @@ export function initRtc(): void {
       await pc.setLocalDescription(answer);
       console.debug("[solace:FE] rtc answer created", { me, to: p.from, hasSdp: !!pc.localDescription });
       socket.emit("rtc:answer", { to: p.from, sdp: pc.localDescription });
+      flushPending(pc, p.from);
     } catch (err) {
       const e = err as DOMException;
       console.debug("[solace:FE] rtc offer handler error", { me, from: p.from, name: e?.name, message: e?.message });
     }
   });
   socket.on("rtc:answer", async (p: { from: string; sdp: RTCSessionDescription }) => {
+    const pc = peers.get(p.from);
+    console.debug("[solace:FE] rtc answer received", { me, from: p.from, state: pc?.signalingState });
+    if (!pc) {
+      console.debug("[solace:FE] rtc answer ignored (no peer)", { me, from: p.from });
+      return;
+    }
+    if (pc.signalingState !== "have-local-offer") {
+      console.debug("[solace:FE] rtc answer ignored", { me, from: p.from, state: pc.signalingState });
+      return;
+    }
     try {
-      const pc = peers.get(p.from);
-      console.debug("[solace:FE] rtc answer received", { me, from: p.from, hasLocalRemoteDescription: pc?.remoteDescription !== null && pc?.remoteDescription !== undefined });
-      if (pc && pc.signalingState === "have-local-offer") {
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(p.sdp));
-          console.debug("[solace:FE] rtc remote description set", { me, from: p.from, type: "answer" });
-        } catch (err) {
-          const e = err as DOMException;
-          console.debug("[solace:FE] rtc answer setRemoteDescription failed", { me, from: p.from, name: e?.name, state: pc.signalingState });
-        }
-      }
+      await pc.setRemoteDescription(new RTCSessionDescription(p.sdp));
+      console.debug("[solace:FE] rtc remote description set", { me, from: p.from, type: "answer", state: pc.signalingState });
+      flushPending(pc, p.from);
     } catch (err) {
       const e = err as DOMException;
-      console.debug("[solace:FE] rtc answer handler error", { me, from: p.from, name: e?.name, message: e?.message });
+      console.debug("[solace:FE] rtc answer setRemoteDescription failed", { me, from: p.from, name: e?.name, state: pc.signalingState });
     }
   });
   socket.on("rtc:ice", async (p: { from: string; candidate: RTCIceCandidateInit }) => {
@@ -182,6 +290,8 @@ export function initRtc(): void {
     if (pc) {
       pc.close();
       peers.delete(p.socketId);
+      senders.delete(pc);
+      pendingNegotiation.delete(pc);
     }
     useRoomStore.getState().setRemoteStream(p.socketId, null);
   });
@@ -190,6 +300,18 @@ export function initRtc(): void {
     console.debug("[solace:FE] rtc connected", { me });
   });
   if (socket.connected) me = socket.id ?? null;
+}
+
+export function stopRtc(): void {
+  console.debug("[solace:FE] rtc stopRtc", { me, peers: peers.size, hadLocalStream: !!localStream });
+  localStream?.getTracks().forEach((t) => t.stop());
+  localStream = null;
+  peers.forEach((pc) => {
+    pc.close();
+    senders.delete(pc);
+    pendingNegotiation.delete(pc);
+  });
+  peers.clear();
 }
 
 const analysers = new Map<string, AnalyserNode>();
