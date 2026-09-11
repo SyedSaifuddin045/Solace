@@ -9,9 +9,11 @@ import { useIdle } from "@/hooks/useIdle";
 
 export function TimerCenter() {
   const timer = useRoomStore((s) => s.state.timer);
+  const pending = useRoomStore((s) => s.pendingTimerMinutes);
   const [minimized, setMinimized] = useState(false);
   const idle = useIdle();
   const { remainingMs, running } = useTimerCountdown(timer);
+  const startMinutes = pending ?? 25;
 
   useEffect(() => {
     console.debug("[solace:FE] TimerCenter tick", {
@@ -25,9 +27,15 @@ export function TimerCenter() {
     });
   });
 
-  const start25 = () => {
-    console.debug("[solace:FE] timer:start emit", { minutes: 25 });
-    getSocket().emit("timer:start", { minutes: 25 });
+  const startTimer = () => {
+    console.debug("[solace:FE] timer:start emit", { minutes: startMinutes });
+    getSocket().emit("timer:start", { minutes: startMinutes });
+    useRoomStore.getState().armTimer(null);
+  };
+  const resume = () => {
+    const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+    console.debug("[solace:FE] timer:resume emit", { minutes });
+    getSocket().emit("timer:start", { minutes });
   };
   const pause = () => {
     console.debug("[solace:FE] timer:pause emit");
@@ -77,11 +85,14 @@ export function TimerCenter() {
             <div className="h-full rounded" style={{ width: `${progressPct(timer)}%`, background: "var(--accent-amber)" }} />
           </div>
           <div className="flex items-center gap-1.5 justify-center">
-            <button onClick={start25} aria-label="Start 25" disabled={timer.status === "running"} className="rounded-full px-3 py-1 text-[10px] flex items-center gap-1 disabled:opacity-40" style={{ background: "rgba(224,164,88,0.16)", color: "var(--accent-amber)" }}>
-              <Play size={10} /> start 25
+            <button onClick={startTimer} aria-label={`Start ${startMinutes}`} disabled={timer.status === "running"} className="rounded-full px-3 py-1 text-[10px] flex items-center gap-1 disabled:opacity-40" style={{ background: "rgba(224,164,88,0.16)", color: "var(--accent-amber)" }}>
+              <Play size={10} /> start {startMinutes}
             </button>
             {timer.status === "running" && (
               <button onClick={pause} aria-label="Pause" className="hairline rounded-full p-1.5 text-[10px]"><Pause size={10} /></button>
+            )}
+            {timer.status === "paused" && (
+              <button onClick={resume} aria-label="Resume" className="hairline rounded-full p-1.5 text-[10px]"><Play size={10} /></button>
             )}
             <button onClick={reset} aria-label="Reset" className="hairline rounded-full p-1.5 text-[10px]"><RotateCcw size={10} /></button>
             <button onClick={minimize} aria-label="Minimize" className="hairline rounded-full p-1.5 text-[10px]"><Minimize2 size={10} /></button>
