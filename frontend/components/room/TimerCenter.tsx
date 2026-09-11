@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Play, Pause, RotateCcw, Minimize2, Clock } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
+import { loadPrefs, savePrefs } from "@/lib/prefs";
 import { useTimerCountdown } from "@/hooks/useTimerCountdown";
 import { formatRemaining, progressPct } from "@/lib/time";
 import { useIdle } from "@/hooks/useIdle";
@@ -13,7 +14,7 @@ export function TimerCenter() {
   const timer = useRoomStore((s) => s.state.timer);
   const pending = useRoomStore((s) => s.pendingTimerMinutes);
   const [dialOpen, setDialOpen] = useState(false);
-  const [dialValue, setDialValue] = useState(pending ?? 25);
+  const [dialValue, setDialValue] = useState(pending ?? loadPrefs().lastTimerMinutes);
   const [minimized, setMinimized] = useState(false);
   const idle = useIdle();
   const { remainingMs, running } = useTimerCountdown(timer);
@@ -39,6 +40,9 @@ export function TimerCenter() {
     console.debug("[solace:FE] timer:start emit", { minutes: mins });
     getSocket().emit("timer:start", { minutes: mins });
     useRoomStore.getState().armTimer(null);
+    const p = loadPrefs();
+    p.lastTimerMinutes = mins;
+    savePrefs(p);
     setDialOpen(false);
   };
   const resume = () => {
@@ -128,7 +132,7 @@ export function TimerCenter() {
               ) : (
                 <button
                   onClick={() => {
-                    setDialValue(pending ?? 25);
+                    setDialValue(pending ?? loadPrefs().lastTimerMinutes);
                     setDialOpen(true);
                   }}
                   className="hairline rounded-full px-3 py-1 text-[10px] flex items-center gap-1"

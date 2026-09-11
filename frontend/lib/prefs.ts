@@ -5,6 +5,7 @@ export interface Prefs {
   avatar: string | null;      // data URL only (capped), null = initials
   theme: ThemePrefs;
   recentRooms: string[];      // max 5
+  lastTimerMinutes: number;   // clock dial memory
 }
 
 export const KEY = "solace.prefs";
@@ -14,6 +15,7 @@ export const DEFAULT_PREFS: Prefs = {
   avatar: null,
   theme: { accent: "amber", glow: 100, dim: 55, blur: 14, font: "sans" },
   recentRooms: [],
+  lastTimerMinutes: 25,
 };
 
 export function loadPrefs(): Prefs {
@@ -27,6 +29,7 @@ export function loadPrefs(): Prefs {
       name: typeof parsed.name === "string" ? parsed.name.slice(0, 24) : DEFAULT_PREFS.name,
       avatar: typeof parsed.avatar === "string" ? parsed.avatar : null,
       recentRooms: Array.isArray(parsed.recentRooms) ? parsed.recentRooms.slice(0, 5) : [],
+      lastTimerMinutes: typeof parsed.lastTimerMinutes === "number" && parsed.lastTimerMinutes >= 1 && parsed.lastTimerMinutes <= 180 ? parsed.lastTimerMinutes : DEFAULT_PREFS.lastTimerMinutes,
       theme: { ...DEFAULT_PREFS.theme, ...(parsed.theme ?? {}) },
     };
   } catch {

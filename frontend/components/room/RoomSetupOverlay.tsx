@@ -7,6 +7,7 @@ import { uploadWallpaper, resolveAssetUrl } from "@/lib/upload";
 import { GRADIENTS, GRADIENT_PREFIX } from "@/lib/wallpaper";
 import { pushToast } from "@/components/room/ToastStack";
 import { ClockDial } from "@/components/timer/ClockDial";
+import { loadPrefs, savePrefs } from "@/lib/prefs";
 
 export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
   const roomId = useRoomStore((s) => s.roomId);
@@ -18,7 +19,7 @@ export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
   const [title, setTitle] = useState("");
   const [uploading, setUploading] = useState(false);
   const [timerDialOpen, setTimerDialOpen] = useState(false);
-  const [timerDialValue, setTimerDialValue] = useState(pendingTimerMinutes ?? 25);
+  const [timerDialValue, setTimerDialValue] = useState(pendingTimerMinutes ?? loadPrefs().lastTimerMinutes);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const setWallpaper = (url: string | null, kind: "image" | "video") => {
@@ -143,6 +144,9 @@ export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
               <button
                 onClick={() => {
                   armTimer(timerDialValue);
+                  const p = loadPrefs();
+                  p.lastTimerMinutes = timerDialValue;
+                  savePrefs(p);
                   setTimerDialOpen(false);
                 }}
                 className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full px-4 py-1 text-[11px] font-medium"
@@ -155,7 +159,7 @@ export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
             <div className="flex items-center gap-2 mt-2">
               <button
                 onClick={() => {
-                  setTimerDialValue(pendingTimerMinutes ?? 25);
+                  setTimerDialValue(pendingTimerMinutes ?? loadPrefs().lastTimerMinutes);
                   setTimerDialOpen(true);
                 }}
                 className="rounded-full px-4 py-1.5 text-[11px] flex items-center gap-1.5"
