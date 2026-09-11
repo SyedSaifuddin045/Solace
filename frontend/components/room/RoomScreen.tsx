@@ -14,7 +14,7 @@ import { RoomSetupOverlay } from "@/components/room/RoomSetupOverlay";
 import { getSocket } from "@/lib/socket";
 import { useRoomStore } from "@/lib/store";
 import { loadPrefs } from "@/lib/prefs";
-import { initRtc, startSpeakingDetection } from "@/lib/rtc";
+import { initRtc, startSpeakingDetection, stopRtc } from "@/lib/rtc";
 import { resolveAssetUrl } from "@/lib/upload";
 import { isGradientUrl, gradientCss } from "@/lib/wallpaper";
 
@@ -100,6 +100,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
     return () => {
       ons.forEach(([n, f]) => socket.off(n, f as never));
+      stopRtc();
     };
   }, [roomId]);
 

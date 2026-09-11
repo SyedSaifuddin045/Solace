@@ -4,7 +4,7 @@ import { Mic, MicOff, Video, VideoOff, Settings, MessageSquare, Info, Image as I
 import { useRouter } from "next/navigation";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
-import { startRtc } from "@/lib/rtc";
+import { startRtc, stopRtc } from "@/lib/rtc";
 import { ChatPanel } from "@/components/panels/ChatPanel";
 import { InfoPanel } from "@/components/panels/InfoPanel";
 import { ThemePanel } from "@/components/panels/ThemePanel";
@@ -79,6 +79,8 @@ export function ControlsCluster() {
           aria-label="Leave room"
           onClick={() => {
             getSocket().emit("room:leave");
+            console.debug("[solace:FE] leave room stopRtc", {});
+            stopRtc();
             useRoomStore.getState().reset();
             router.replace("/");
           }}
