@@ -58,13 +58,20 @@ export function TimerCenter() {
     setMinimized(true);
   };
 
-  const hintVisible = mounted && running && (idle || minimized);
+  const hintVisible = mounted && minimized;
 
   useEffect(() => {
     if (hintVisible) {
       console.debug("[solace:FE] TimerCenter hint visible (minimized/idle transition)", { running, idle, minimized, status: timer.status });
     }
   }, [hintVisible, running, idle, minimized, timer.status]);
+
+  // Auto-expand when timer pauses or completes while minimized
+  useEffect(() => {
+    if (minimized && timer.status !== "running") {
+      setMinimized(false);
+    }
+  }, [minimized, timer.status]);
 
   if (!mounted) {
     return (
@@ -74,7 +81,7 @@ export function TimerCenter() {
 
   return (
     <>
-      {/* minimized + running: amber pulse hint */}
+      {/* minimized: amber pulse hint (auto-expands on pause/idle) */}
       {hintVisible && (
         <button
           onClick={() => {
