@@ -1,16 +1,19 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Play, Pause, RotateCcw, Minimize2 } from "lucide-react";
+import { Play, Pause, RotateCcw, Minimize2, Clock } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { useTimerCountdown } from "@/hooks/useTimerCountdown";
 import { formatRemaining, progressPct } from "@/lib/time";
 import { useIdle } from "@/hooks/useIdle";
+import { ClockDial } from "@/components/timer/ClockDial";
 
 export function TimerCenter() {
   const [mounted, setMounted] = useState(false);
   const timer = useRoomStore((s) => s.state.timer);
   const pending = useRoomStore((s) => s.pendingTimerMinutes);
+  const [dialOpen, setDialOpen] = useState(false);
+  const [dialValue, setDialValue] = useState(pending ?? 25);
   const [minimized, setMinimized] = useState(false);
   const idle = useIdle();
   const { remainingMs, running } = useTimerCountdown(timer);
@@ -32,10 +35,11 @@ export function TimerCenter() {
     });
   });
 
-  const startChip = (mins: number) => {
+  const startTimer = (mins: number) => {
     console.debug("[solace:FE] timer:start emit", { minutes: mins });
     getSocket().emit("timer:start", { minutes: mins });
     useRoomStore.getState().armTimer(null);
+    setDialOpen(false);
   };
   const resume = () => {
     console.debug("[solace:FE] timer:resume emit");
@@ -100,16 +104,32 @@ export function TimerCenter() {
           )}
           {timer.status === "idle" && (
             <div className="flex items-center gap-1.5 justify-center">
-              {[25, 45, 60].map((mins) => (
+              {dialOpen ? (
+                <div className="relative" style={{ width: 220, height: 240 }}>
+                  <ClockDial
+                    value={dialValue}
+                    onChange={setDialValue}
+                  />
+                  <button
+                    onClick={() => startTimer(dialValue)}
+                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full px-4 py-1 text-[11px] font-medium"
+                    style={{ background: "var(--accent-amber)", color: "#14110F" }}
+                  >
+                    set
+                  </button>
+                </div>
+              ) : (
                 <button
-                  key={mins}
-                  onClick={() => startChip(mins)}
-                  className={`rounded-full px-3 py-1 text-[10px] ${pending === mins ? "text-black" : "hairline"}`}
-                  style={pending === mins ? { background: "var(--accent-amber)" } : undefined}
+                  onClick={() => {
+                    setDialValue(pending ?? 25);
+                    setDialOpen(true);
+                  }}
+                  className="hairline rounded-full px-3 py-1 text-[10px] flex items-center gap-1"
                 >
-                  {mins}
+                  <Clock size={10} />
+                  <span>set timer</span>
                 </button>
-              ))}
+              )}
             </div>
           )}
           {timer.status !== "idle" && (

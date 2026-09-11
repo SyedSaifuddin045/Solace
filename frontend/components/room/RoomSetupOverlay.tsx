@@ -1,11 +1,12 @@
 "use client";
 import { useRef, useState } from "react";
-import { Upload } from "lucide-react";
+import { Upload, Clock } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { uploadWallpaper, resolveAssetUrl } from "@/lib/upload";
 import { GRADIENTS, GRADIENT_PREFIX } from "@/lib/wallpaper";
 import { pushToast } from "@/components/room/ToastStack";
+import { ClockDial } from "@/components/timer/ClockDial";
 
 export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
   const roomId = useRoomStore((s) => s.roomId);
@@ -16,6 +17,8 @@ export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
 
   const [title, setTitle] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [timerDialOpen, setTimerDialOpen] = useState(false);
+  const [timerDialValue, setTimerDialValue] = useState(pendingTimerMinutes ?? 25);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const setWallpaper = (url: string | null, kind: "image" | "video") => {
@@ -131,31 +134,50 @@ export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
         {/* Timer */}
         <div className="mb-6">
           <label className="text-[10px] opacity-50 uppercase tracking-widest">timer</label>
-          <div className="flex gap-2 mt-2">
-            {[25, 45, 60].map((n) => (
+          {timerDialOpen ? (
+            <div className="mt-2 relative" style={{ width: 220, height: 240 }}>
+              <ClockDial
+                value={timerDialValue}
+                onChange={setTimerDialValue}
+              />
               <button
-                key={n}
-                onClick={() => armTimer(n)}
-                className="rounded-full px-4 py-1.5 text-[11px] flex items-center gap-1"
+                onClick={() => {
+                  armTimer(timerDialValue);
+                  setTimerDialOpen(false);
+                }}
+                className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full px-4 py-1 text-[11px] font-medium"
+                style={{ background: "var(--accent-amber)", color: "#14110F" }}
+              >
+                set
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={() => {
+                  setTimerDialValue(pendingTimerMinutes ?? 25);
+                  setTimerDialOpen(true);
+                }}
+                className="rounded-full px-4 py-1.5 text-[11px] flex items-center gap-1.5"
                 style={{
-                  background: pendingTimerMinutes === n ? "var(--accent-amber)" : "rgba(20,17,15,0.4)",
-                  color: pendingTimerMinutes === n ? "#14110F" : undefined,
+                  background: pendingTimerMinutes !== null ? "var(--accent-amber)" : "rgba(20,17,15,0.4)",
+                  color: pendingTimerMinutes !== null ? "#14110F" : undefined,
                 }}
               >
-                {n}m
+                <Clock size={12} />
+                {pendingTimerMinutes !== null ? `${pendingTimerMinutes} min` : "Timer"}
               </button>
-            ))}
-            <button
-              onClick={() => armTimer(null)}
-              className="rounded-full px-4 py-1.5 text-[11px] flex items-center gap-1"
-              style={{
-                background: pendingTimerMinutes === null ? "var(--accent-amber)" : "rgba(20,17,15,0.4)",
-                color: pendingTimerMinutes === null ? "#14110F" : undefined,
-              }}
-            >
-              off
-            </button>
-          </div>
+              {pendingTimerMinutes !== null && (
+                <button
+                  onClick={() => armTimer(null)}
+                  className="rounded-full px-4 py-1.5 text-[11px]"
+                  style={{ background: "rgba(20,17,15,0.4)" }}
+                >
+                  off
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* CTA */}
