@@ -80,6 +80,39 @@ function createTimerHandler(io, roomService) {
                 emitError(socket, err);
             }
         },
+        handleResume(socket) {
+            const room = requireRoom(socket);
+            if (!room) return;
+            if (room.state.timer.status !== "paused") return;
+            try {
+                const member = room.members.get(socket.id);
+                const actor = { socketId: socket.id, displayName: member ? member.displayName : "unknown" };
+                console.log("[solace:BE] timer:resume received", { from: socket.id, roomId: room.id, remainingMs: room.state.timer.remainingMs });
+                const { room: updatedRoom, timer } = roomService.resumeTimer(room.id, socket.id, (completion) => {
+                    console.log("[solace:BE] timer:complete fired", {
+                        roomId: updatedRoom.id,
+                        completedBy: actor.socketId,
+                        durationMs: completion.timer.durationMs
+                    });
+                    io.to(updatedRoom.id).emit(SERVER.TIMER_COMPLETE, {
+                        completedBy: actor.socketId,
+                        durationMs: completion.timer.durationMs
+                    });
+                    io.to(updatedRoom.id).emit(SERVER.TIMER_STATE, completion.timer);
+                    logTimer(updatedRoom, actor, "timer finished");
+                });
+                console.log("[solace:BE] timer:resume result", {
+                    from: socket.id,
+                    roomId: updatedRoom.id,
+                    status: timer.status,
+                    remainingMs: timer.remainingMs
+                });
+                io.to(updatedRoom.id).emit(SERVER.TIMER_STATE, timer);
+                logTimer(updatedRoom, actor, "resumed timer");
+            } catch (err) {
+                emitError(socket, err);
+            }
+        },
         handleReset(socket) {
             const room = requireRoom(socket);
             if (!room) return;

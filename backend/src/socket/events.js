@@ -8,6 +8,7 @@ const CLIENT = {
     TIMER_START: "timer:start",
     TIMER_PAUSE: "timer:pause",
     TIMER_RESET: "timer:reset",
+    TIMER_RESUME: "timer:resume",
     PLAYBACK_PLAY: "playback:play",
     PLAYBACK_PAUSE: "playback:pause",
     PLAYBACK_SEEK: "playback:seek",

@@ -294,6 +294,35 @@ class RoomService {
         return { room, timer: { ...t } };
     }
 
+    resumeTimer(roomId, socketId, onComplete) {
+        const room = this._assertRoom(roomId);
+        this._assertMember(room, socketId);
+        const t = room.state.timer;
+        if (t.status !== "paused") throw new InvalidPayloadError("Timer is not paused");
+        const now = this._now();
+        const remainingMs = t.remainingMs || 0;
+        if (room.timerHandle) this._cancel(room.timerHandle);
+        Object.assign(t, {
+            status: "running",
+            endsAt: now + remainingMs,
+            startedAt: now,
+            updatedAt: now
+        });
+        const handle = this._schedule(() => {
+            room.state.timer.endsAt = null;
+            room.state.timer.startedAt = null;
+            room.state.timer.startedBy = null;
+            if (typeof onComplete === "function") {
+                onComplete({
+                    status: "idle",
+                    timer: { ...room.state.timer, status: "idle", completed: true }
+                });
+            }
+        }, remainingMs);
+        room.timerHandle = handle;
+        return { room, timer: { ...t } };
+    }
+
     resetTimer(roomId, socketId) {
         const room = this._assertRoom(roomId);
         this._assertMember(room, socketId);

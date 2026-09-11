@@ -179,6 +179,11 @@ async function scenario() {
         await timerPauseP;
         pass("timer pause syncs host -> guest", "status=paused");
 
+        const timerResumeP = waitFor(B, "timer:state", (p) => p.status === "running");
+        A.emit("timer:resume");
+        await timerResumeP;
+        pass("timer resume syncs host -> guest", "status=running");
+
         const timerResetP = waitFor(B, "timer:state", (p) => p.status === "idle");
         A.emit("timer:reset");
         await timerResetP;

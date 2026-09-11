@@ -43,6 +43,7 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
         socket.on(CLIENT.ACTIVITY_SEND, (payload) => activityHandler.handleSend(socket, payload));
         socket.on(CLIENT.TIMER_START, (payload) => timerHandler.handleStart(socket, payload));
         socket.on(CLIENT.TIMER_PAUSE, () => timerHandler.handlePause(socket));
+        socket.on(CLIENT.TIMER_RESUME, () => timerHandler.handleResume(socket));
         socket.on(CLIENT.TIMER_RESET, () => timerHandler.handleReset(socket));
 
         socket.on("disconnect", () => {

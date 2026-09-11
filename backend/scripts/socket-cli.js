@@ -192,6 +192,7 @@ function handleCommand(line) {
                     "  media <on|off>       — rtc:media { audio, video }",
                     "  timer <minutes>      — timer:start (1-180)",
                     "  timer pause          — timer:pause",
+                    "  timer resume         — timer:resume",
                     "  timer reset          — timer:reset",
                     "  offer <targetId> <sdp> — rtc:offer relay",
                     "  quit / exit          — disconnect + exit",
@@ -301,10 +302,11 @@ function handleCommand(line) {
 
         case "timer":
             if (arg0 === "pause") { emit("timer:pause"); break; }
+            if (arg0 === "resume") { emit("timer:resume"); break; }
             if (arg0 === "reset") { emit("timer:reset"); break; }
             const m = Number(arg0);
             if (!arg0 || Number.isNaN(m) || m < 1 || m > 180) {
-                console.log("Usage: timer <minutes 1-180> | pause | reset");
+                console.log("Usage: timer <minutes 1-180> | pause | resume | reset");
                 break;
             }
             emit("timer:start", { minutes: m });
