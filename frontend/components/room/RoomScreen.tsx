@@ -104,6 +104,15 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
     };
   }, [roomId]);
 
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      stopRtc();
+      getSocket().emit("room:leave");
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
   if (error?.code === "ROOM_NOT_FOUND" || error?.code === "ROOM_FULL") {
     return <ErrorPage code={error.code} />;
   }

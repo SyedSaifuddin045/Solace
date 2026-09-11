@@ -8,6 +8,7 @@ import { formatRemaining, progressPct } from "@/lib/time";
 import { useIdle } from "@/hooks/useIdle";
 
 export function TimerCenter() {
+  const [mounted, setMounted] = useState(false);
   const timer = useRoomStore((s) => s.state.timer);
   const pending = useRoomStore((s) => s.pendingTimerMinutes);
   const [minimized, setMinimized] = useState(false);
@@ -15,6 +16,11 @@ export function TimerCenter() {
   const { remainingMs, running } = useTimerCountdown(timer);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     console.debug("[solace:FE] TimerCenter tick", {
       status: timer.status,
       remainingMs,
@@ -48,13 +54,19 @@ export function TimerCenter() {
     setMinimized(true);
   };
 
-  const hintVisible = running && (idle || minimized);
+  const hintVisible = mounted && running && (idle || minimized);
 
   useEffect(() => {
     if (hintVisible) {
       console.debug("[solace:FE] TimerCenter hint visible (minimized/idle transition)", { running, idle, minimized, status: timer.status });
     }
   }, [hintVisible, running, idle, minimized, timer.status]);
+
+  if (!mounted) {
+    return (
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome" />
+    );
+  }
 
   return (
     <>
