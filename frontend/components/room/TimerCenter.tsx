@@ -13,7 +13,6 @@ export function TimerCenter() {
   const [minimized, setMinimized] = useState(false);
   const idle = useIdle();
   const { remainingMs, running } = useTimerCountdown(timer);
-  const startMinutes = pending ?? 25;
 
   useEffect(() => {
     console.debug("[solace:FE] TimerCenter tick", {
@@ -27,15 +26,14 @@ export function TimerCenter() {
     });
   });
 
-  const startTimer = () => {
-    console.debug("[solace:FE] timer:start emit", { minutes: startMinutes });
-    getSocket().emit("timer:start", { minutes: startMinutes });
+  const startChip = (mins: number) => {
+    console.debug("[solace:FE] timer:start emit", { minutes: mins });
+    getSocket().emit("timer:start", { minutes: mins });
     useRoomStore.getState().armTimer(null);
   };
   const resume = () => {
-    const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
-    console.debug("[solace:FE] timer:resume emit", { minutes });
-    getSocket().emit("timer:start", { minutes });
+    console.debug("[solace:FE] timer:resume emit");
+    getSocket().emit("timer:resume");
   };
   const pause = () => {
     console.debug("[solace:FE] timer:pause emit");
@@ -76,27 +74,44 @@ export function TimerCenter() {
         </button>
       )}
 
-      {/* expanded card — chrome family (hides on idle) */}
-      {!idle && !minimized && (
+      {/* expanded card */}
+      {!minimized && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome">
-          <p className="text-[10px] opacity-50 mb-0.5">pomodoro · {timer.status}</p>
-          <p className="text-xl font-light tracking-wide leading-none" style={{ color: "var(--accent-amber)" }}>{formatRemaining(running || timer.status === "paused" ? remainingMs : timer.durationMs)}</p>
-          <div className="h-[3px] rounded mt-1.5 mb-2" style={{ background: "rgba(237,224,210,0.15)" }}>
-            <div className="h-full rounded" style={{ width: `${progressPct(timer)}%`, background: "var(--accent-amber)" }} />
-          </div>
-          <div className="flex items-center gap-1.5 justify-center">
-            <button onClick={startTimer} aria-label={`Start ${startMinutes}`} disabled={timer.status === "running"} className="rounded-full px-3 py-1 text-[10px] flex items-center gap-1 disabled:opacity-40" style={{ background: "rgba(224,164,88,0.16)", color: "var(--accent-amber)" }}>
-              <Play size={10} /> start {startMinutes}
-            </button>
-            {timer.status === "running" && (
-              <button onClick={pause} aria-label="Pause" className="hairline rounded-full p-1.5 text-[10px]"><Pause size={10} /></button>
-            )}
-            {timer.status === "paused" && (
-              <button onClick={resume} aria-label="Resume" className="hairline rounded-full p-1.5 text-[10px]"><Play size={10} /></button>
-            )}
-            <button onClick={reset} aria-label="Reset" className="hairline rounded-full p-1.5 text-[10px]"><RotateCcw size={10} /></button>
-            <button onClick={minimize} aria-label="Minimize" className="hairline rounded-full p-1.5 text-[10px]"><Minimize2 size={10} /></button>
-          </div>
+          {timer.status !== "idle" && (
+            <>
+              <p className="text-[10px] opacity-50 mb-0.5">pomodoro · {timer.status}</p>
+              <p className="text-xl font-light tracking-wide leading-none" style={{ color: "var(--accent-amber)" }}>{formatRemaining(running || timer.status === "paused" ? remainingMs : timer.durationMs)}</p>
+              <div className="h-[3px] rounded mt-1.5 mb-2" style={{ background: "rgba(237,224,210,0.15)" }}>
+                <div className="h-full rounded" style={{ width: `${progressPct(timer)}%`, background: "var(--accent-amber)" }} />
+              </div>
+            </>
+          )}
+          {timer.status === "idle" && (
+            <div className="flex items-center gap-1.5 justify-center">
+              {[25, 45, 60].map((mins) => (
+                <button
+                  key={mins}
+                  onClick={() => startChip(mins)}
+                  className={`rounded-full px-3 py-1 text-[10px] ${pending === mins ? "text-black" : "hairline"}`}
+                  style={pending === mins ? { background: "var(--accent-amber)" } : undefined}
+                >
+                  {mins}
+                </button>
+              ))}
+            </div>
+          )}
+          {timer.status !== "idle" && (
+            <div className="flex items-center gap-1.5 justify-center">
+              {timer.status === "running" && (
+                <button onClick={pause} aria-label="Pause" className="hairline rounded-full p-1.5 text-[10px]"><Pause size={10} /></button>
+              )}
+              {timer.status === "paused" && (
+                <button onClick={resume} aria-label="Resume" className="hairline rounded-full p-1.5 text-[10px]"><Play size={10} /></button>
+              )}
+              <button onClick={reset} aria-label="Reset" className="hairline rounded-full p-1.5 text-[10px]"><RotateCcw size={10} /></button>
+              <button onClick={minimize} aria-label="Minimize" className="hairline rounded-full p-1.5 text-[10px]"><Minimize2 size={10} /></button>
+            </div>
+          )}
         </div>
       )}
     </>
