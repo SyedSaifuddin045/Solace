@@ -35,7 +35,7 @@ export function SongWidget() {
 
   return (
     <div
-      className="glass rounded-xl px-4 py-2 warm-glow"
+      className="glass rounded-xl px-4 py-2 warm-glow max-w-xs w-full sm:w-auto"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >

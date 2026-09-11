@@ -79,7 +79,7 @@ export function TimerCenter() {
 
   if (!mounted) {
     return (
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome" />
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome sm:bottom-auto bottom-20" />
     );
   }
 
@@ -103,7 +103,7 @@ export function TimerCenter() {
 
       {/* expanded card */}
       {!minimized && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome sm:bottom-auto bottom-20">
           {timer.status !== "idle" && (
             <>
               <p className="text-[10px] opacity-50 mb-0.5">pomodoro · {timer.status}</p>

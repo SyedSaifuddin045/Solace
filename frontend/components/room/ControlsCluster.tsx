@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Mic, MicOff, Video, VideoOff, Settings, MessageSquare, Info, Image as ImageIcon, LogOut } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, Settings, MessageSquare, Info, Image as ImageIcon, LogOut, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
@@ -54,16 +54,24 @@ export function ControlsCluster() {
   };
 
   return (
-    <>
+    <div className="relative z-30">
       {overlay !== "none" && (
-        <div className="fixed inset-0 z-30" onClick={() => setOverlay("none")}>
-          <div className="absolute inset-y-0 right-0 w-full max-w-sm glass" style={{ background: "rgba(26,22,20,0.85)" }} onClick={(e) => e.stopPropagation()}>
-            {overlay === "chat" && <ChatPanel onClose={() => setOverlay("none")} />}
-            {overlay === "info" && <InfoPanel onClose={() => setOverlay("none")} />}
-            {overlay === "theme" && <ThemePanel onClose={() => setOverlay("none")} />}
-            {overlay === "wallpaper" && <WallpaperPanel onClose={() => setOverlay("none")} />}
+        <>
+          <div className="fixed inset-0 z-[29]" onClick={() => setOverlay("none")} style={{ background: "rgba(0,0,0,0.3)" }} />
+          <div className="fixed inset-y-0 right-0 w-full max-w-sm glass z-30 flex flex-col" style={{ background: "rgba(26,22,20,0.92)" }}>
+            <div className="flex justify-end p-3">
+              <button aria-label="Close panel" onClick={() => setOverlay("none")} className="rounded-full p-1.5" style={{ background: "rgba(237,224,210,0.08)", color: "var(--accent-bone)" }}>
+                <X size={14} strokeWidth={1.8} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              {overlay === "chat" && <ChatPanel onClose={() => setOverlay("none")} />}
+              {overlay === "info" && <InfoPanel onClose={() => setOverlay("none")} />}
+              {overlay === "theme" && <ThemePanel onClose={() => setOverlay("none")} />}
+              {overlay === "wallpaper" && <WallpaperPanel onClose={() => setOverlay("none")} />}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <div className="flex items-center gap-2">
@@ -95,6 +103,6 @@ export function ControlsCluster() {
           <IconBtn label="Room info" onClick={() => setOverlay("info")} active={overlay === "info"}><Info size={14} strokeWidth={1.8} /></IconBtn>
         </div>
       </div>
-    </>
+    </div>
   );
 }

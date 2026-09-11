@@ -146,11 +146,15 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       {/* chrome corners */}
       <ChromeReveal className="absolute top-4 left-5 z-20"><TitleChip /></ChromeReveal>
       <ChromeReveal className="absolute top-4 right-5 z-20"><UsersStack /></ChromeReveal>
-      <ChromeReveal className="absolute bottom-4 left-5 z-20"><SongWidget /></ChromeReveal>
-      <ChromeReveal className="absolute bottom-4 right-5 z-20">
-        <ControlsCluster />
-        <ToastStack />
-      </ChromeReveal>
+      <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 sm:flex-row flex-col-reverse gap-3">
+        <ChromeReveal className="shrink-0"><SongWidget /></ChromeReveal>
+        <ChromeReveal className="shrink-0">
+          <div className="flex flex-col items-end gap-1.5">
+            <ToastStack />
+            <ControlsCluster />
+          </div>
+        </ChromeReveal>
+      </div>
 
       {/* timer center-top — special handling: hint persists when minimized+running */}
       <TimerCenter />
