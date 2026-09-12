@@ -5,7 +5,7 @@ import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { loadPrefs, savePrefs } from "@/lib/prefs";
 import { useTimerCountdown } from "@/hooks/useTimerCountdown";
-import { formatRemaining, progressPct } from "@/lib/time";
+import { formatRemaining } from "@/lib/time";
 import { useIdle } from "@/hooks/useIdle";
 import { ClockDial } from "@/components/timer/ClockDial";
 
@@ -109,7 +109,7 @@ export function TimerCenter() {
               <p className="text-[10px] opacity-50 mb-0.5">pomodoro · {timer.status}</p>
               <p className="text-xl font-light tracking-wide leading-none" style={{ color: "var(--accent-amber)" }}>{formatRemaining(running || timer.status === "paused" ? remainingMs : timer.durationMs)}</p>
               <div className="h-[3px] rounded mt-1.5 mb-2" style={{ background: "rgba(237,224,210,0.15)" }}>
-                <div className="h-full rounded" style={{ width: `${progressPct(timer)}%`, background: "var(--accent-amber)" }} />
+                <div className="h-full rounded transition-all duration-300" style={{ width: `${timer.durationMs > 0 ? Math.min(100, Math.max(0, (remainingMs / timer.durationMs) * 100)) : 0}%`, background: "var(--accent-amber)" }} />
               </div>
             </>
           )}
