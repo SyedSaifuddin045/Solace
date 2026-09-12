@@ -76,7 +76,7 @@ export function UsersStack() {
             key={m.socketId}
             m={m}
             speaking={speaking.includes(m.socketId)}
-            expanded={hoverId === m.socketId || speaking.includes(m.socketId) || members.length <= 3}
+            expanded={m.videoOn || hoverId === m.socketId || speaking.includes(m.socketId) || members.length <= 3}
             isSelf={m.socketId === ownId}
             onHover={setHoverId}
           />
