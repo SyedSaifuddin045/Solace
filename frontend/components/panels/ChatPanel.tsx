@@ -45,11 +45,11 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-1.5 pr-1" onScroll={onScroll}>
-        {activity.map((a) => {
+        {activity.map((a, i) => {
           const { kind } = activityPresentation(a.type);
           const color = KIND_COLOR[kind] ?? "var(--accent-bone)";
           return (
-            <div key={a.id} className="rounded-md px-2 py-1 text-[11px]" style={{ background: "rgba(237,224,210,0.05)" }}>
+            <div key={`${a.id}-${i}`} className="rounded-md px-2 py-1 text-[11px]" style={{ background: "rgba(237,224,210,0.05)" }}>
               {kind === "chat" ? (
                 <span><span className="opacity-80">{a.actor.displayName}:</span> <span>{a.detail}</span></span>
               ) : (

@@ -160,23 +160,28 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       {/* chrome corners */}
       <ChromeReveal className="absolute top-3 sm:top-4 left-3 sm:left-5 z-20"><TitleChip /></ChromeReveal>
       <ChromeReveal className="absolute top-3 sm:top-4 right-3 sm:right-5 z-20"><UsersStack /></ChromeReveal>
-      {/* bottom controls — always row, constrained widths */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
-        <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget /></ChromeReveal>
-        <ChromeReveal className="shrink-0 max-w-[60%]">
-          <div
-            className="flex flex-col items-end gap-1.5 transition-all duration-300"
-            style={
-              activePanel !== "none"
-                ? { position: "fixed", bottom: "1rem", left: "1rem", right: "auto", zIndex: 25 }
-                : undefined
-            }
-          >
+      {/* bottom controls — normal position (hidden when panel open) */}
+      {activePanel === "none" && (
+        <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
+          <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget /></ChromeReveal>
+          <ChromeReveal className="shrink-0 max-w-[60%]">
+            <div className="flex flex-col items-end gap-1.5">
+              <ToastStack />
+              <ControlsCluster activePanel={activePanel} onOpenPanel={(p) => setActivePanel(p)} />
+            </div>
+          </ChromeReveal>
+        </div>
+      )}
+
+      {/* bottom controls — shifted to bottom-left when panel is open */}
+      {activePanel !== "none" && (
+        <div className="fixed bottom-4 left-4 z-25">
+          <div className="flex flex-col items-end gap-1.5">
             <ToastStack />
             <ControlsCluster activePanel={activePanel} onOpenPanel={(p) => setActivePanel(p)} />
           </div>
-        </ChromeReveal>
-      </div>
+        </div>
+      )}
 
       {/* timer center-top — special handling: hint persists when minimized+running */}
       <TimerCenter />
