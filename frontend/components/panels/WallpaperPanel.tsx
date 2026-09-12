@@ -16,20 +16,11 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    console.debug("[solace:FE] WallpaperPanel open", { roomId, wallpapersCount: wallpapers.length, currentUrl: current.url });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const prevCount = useRef(wallpapers.length);
-  useEffect(() => {
-    if (prevCount.current !== wallpapers.length) {
-      console.debug("[solace:FE] WallpaperPanel wallpapers count change", {
-        before: prevCount.current,
-        after: wallpapers.length,
-      });
-      prevCount.current = wallpapers.length;
-    }
-  }, [wallpapers.length]);
+    console.debug("[solace:FE] WallpaperPanel wallpapers", {
+      count: wallpapers.length,
+      entries: wallpapers.map((w) => ({ id: w.id, url: w.url?.slice(0, 80), kind: w.kind, name: w.originalName })),
+    });
+  }, [wallpapers]);
 
   const setScene = (url: string | null, kind: "image" | "video") => {
     console.debug("[solace:FE] wallpaper:set emit", { url: url?.slice(0, 120), kind });
@@ -42,7 +33,7 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       const up = await uploadWallpaper(roomId, file);
-      console.debug("[solace:FE] wallpaper upload SUCCESS", { url: up.url, kind: up.kind, size: up.size });
+      console.debug("[solace:FE] wallpaper upload SUCCESS", { url: up.url, kind: up.kind, size: up.size, resolved: resolveAssetUrl(up.url) });
       getSocket().emit("wallpaper:set", { url: up.url, kind: up.kind });
     } catch (e) {
       console.debug("[solace:FE] wallpaper upload ERROR", { message: (e as Error).message });
