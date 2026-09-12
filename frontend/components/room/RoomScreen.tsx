@@ -173,9 +173,9 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
         </div>
       )}
 
-      {/* bottom controls — shifted to bottom-left when panel is open */}
+      {/* bottom controls — shifted left of panel when open, hidden on mobile */}
       {activePanel !== "none" && (
-        <div className="fixed bottom-4 left-4 z-25">
+        <div className="fixed bottom-4 right-[25rem] z-25 hidden sm:block">
           <div className="flex flex-col items-end gap-1.5">
             <ToastStack />
             <ControlsCluster activePanel={activePanel} onOpenPanel={(p) => setActivePanel(p)} />
