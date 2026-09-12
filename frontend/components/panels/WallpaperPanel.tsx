@@ -141,16 +141,22 @@ function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick:
         background: "var(--depth-2)",
       }}
     >
+      {/* gradient tiles */}
       {isGrad && gradCss && <div className="absolute inset-0 w-full h-full" style={{ background: gradCss }} />}
       {isGrad && !gradCss && <div className="absolute inset-0 w-full h-full wallpaper" />}
+      {/* default dusk (url=null, not gradient) */}
+      {!isGrad && !url && <div className="absolute inset-0 w-full h-full wallpaper" />}
+      {/* uploaded image */}
       {!isGrad && src && kind === "image" && !imgErr && (
         <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" onError={() => setImgErr(true)} />
       )}
-      {(!isGrad && !src || imgErr) && (
-        <div className="absolute inset-0 grid place-items-center text-[8px] opacity-40">no preview</div>
-      )}
+      {/* uploaded video */}
       {!isGrad && src && kind === "video" && (
         <video src={src} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
+      )}
+      {/* error fallback only for uploads that have a URL but failed */}
+      {src && imgErr && (
+        <div className="absolute inset-0 grid place-items-center text-[8px] opacity-40">no preview</div>
       )}
       <span className="absolute bottom-1 left-1 max-w-[calc(100%-8px)] text-[9px] opacity-80 px-1 text-left truncate z-10" style={{ background: "rgba(20,17,15,0.6)", borderRadius: 4 }}>{label}</span>
       {kind === "video" && !isGrad && (
