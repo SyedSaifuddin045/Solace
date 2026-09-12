@@ -122,7 +122,9 @@ function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick:
       {!isGrad && !url && <div className="absolute inset-0 w-full h-full wallpaper" />}
       {/* uploaded image */}
       {!isGrad && src && kind === "image" && !imgErr && (
-        <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" onError={() => setImgErr(true)} />
+        <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover"
+          onLoad={() => console.debug("[solace:FE] Tile img loaded", { url: url?.slice(0, 60) })}
+          onError={(e) => { console.debug("[solace:FE] Tile img FAILED", { url: url?.slice(0, 60), naturalWidth: (e.target as HTMLImageElement).naturalWidth }); setImgErr(true); }} />
       )}
       {/* uploaded video */}
       {!isGrad && src && kind === "video" && (
