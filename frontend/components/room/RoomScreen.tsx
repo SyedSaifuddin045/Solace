@@ -160,28 +160,19 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       {/* chrome corners */}
       <ChromeReveal className="absolute top-3 sm:top-4 left-3 sm:left-5 z-20"><TitleChip /></ChromeReveal>
       <ChromeReveal className="absolute top-3 sm:top-4 right-3 sm:right-5 z-20"><UsersStack /></ChromeReveal>
-      {/* bottom controls — normal position (hidden when panel open) */}
-      {activePanel === "none" && (
-        <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
-          <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget /></ChromeReveal>
-          <ChromeReveal className="shrink-0 max-w-[60%]">
-            <div className="flex flex-col items-end gap-1.5">
-              <ToastStack />
-              <ControlsCluster activePanel={activePanel} onOpenPanel={(p) => setActivePanel(p)} />
-            </div>
-          </ChromeReveal>
-        </div>
-      )}
-
-      {/* bottom controls — shifted left of panel when open, hidden on mobile */}
-      {activePanel !== "none" && (
-        <div className="fixed bottom-4 right-[25rem] z-25 hidden sm:block">
-          <div className="flex flex-col items-end gap-1.5">
+      {/* bottom controls — single render, shift left when panel opens */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
+        <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget /></ChromeReveal>
+        <ChromeReveal className="shrink-0 max-w-[60%]">
+          <div
+            className="flex flex-col items-end gap-1.5 transition-transform duration-300 ease-out hidden sm:flex"
+            style={{ transform: activePanel !== "none" ? "translateX(-25rem)" : "translateX(0)" }}
+          >
             <ToastStack />
             <ControlsCluster activePanel={activePanel} onOpenPanel={(p) => setActivePanel(p)} />
           </div>
-        </div>
-      )}
+        </ChromeReveal>
+      </div>
 
       {/* timer center-top — special handling: hint persists when minimized+running */}
       <TimerCenter />
