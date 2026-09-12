@@ -1,5 +1,4 @@
 services:
-  # Frontend + nginx services slot in here later (websocket proxy)
   backend:
     build: ./backend
     container_name: solace-backend
@@ -22,6 +21,29 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8080}
+    container_name: solace-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   coturn:
     image: coturn/coturn:4.6
     container_name: solace-turn
