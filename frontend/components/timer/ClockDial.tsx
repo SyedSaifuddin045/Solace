@@ -185,7 +185,7 @@ export function ClockDial({ value, onChange, label }: ClockDialProps) {
         className="absolute inset-0 flex items-center justify-center pointer-events-none"
         style={{ color: "var(--accent-amber)" }}
       >
-        <span className="text-xl font-light tracking-wide">
+        <span className="text-lg sm:text-xl font-light tracking-wide">
           {value} min
         </span>
       </div>

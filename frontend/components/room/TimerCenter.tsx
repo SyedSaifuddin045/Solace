@@ -103,7 +103,7 @@ export function TimerCenter() {
 
       {/* expanded card */}
       {!minimized && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome sm:bottom-auto bottom-20">
+        <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome max-w-[90vw] sm:bottom-auto bottom-20">
           {timer.status !== "idle" && (
             <>
               <p className="text-[10px] opacity-50 mb-0.5">pomodoro · {timer.status}</p>
@@ -116,7 +116,7 @@ export function TimerCenter() {
           {timer.status === "idle" && (
             <div className="flex items-center gap-1.5 justify-center">
               {dialOpen ? (
-                <div className="relative" style={{ width: 220, height: 240 }}>
+                <div className="relative w-full max-w-[220px] max-sm:max-w-[180px] mx-auto" style={{ aspectRatio: "11/12" }}>
                   <ClockDial
                     value={dialValue}
                     onChange={setDialValue}

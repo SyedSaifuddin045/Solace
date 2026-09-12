@@ -32,6 +32,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
   const [setupVisible, setSetupVisible] = useState(false);
   const [activePanel, setActivePanel] = useState<PanelKind | "none">("none");
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
     // client-only mount check per spec: show setup overlay before entering
@@ -47,6 +48,14 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
     console.debug("[solace:FE] RoomScreen setup completed");
     setSetupVisible(false);
   };
+
+  useEffect(() => {
+    if (activePanel !== "none") {
+      requestAnimationFrame(() => setPanelOpen(true));
+    } else {
+      setPanelOpen(false);
+    }
+  }, [activePanel]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -149,11 +158,12 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       </div>
 
       {/* chrome corners */}
-      <ChromeReveal className="absolute top-4 left-5 z-20"><TitleChip /></ChromeReveal>
-      <ChromeReveal className="absolute top-4 right-5 z-20"><UsersStack /></ChromeReveal>
-      <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 sm:flex-row flex-col-reverse gap-3">
-        <ChromeReveal className="shrink-0"><SongWidget /></ChromeReveal>
-        <ChromeReveal className="shrink-0">
+      <ChromeReveal className="absolute top-3 sm:top-4 left-3 sm:left-5 z-20"><TitleChip /></ChromeReveal>
+      <ChromeReveal className="absolute top-3 sm:top-4 right-3 sm:right-5 z-20"><UsersStack /></ChromeReveal>
+      {/* bottom controls — always row, constrained widths */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
+        <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget /></ChromeReveal>
+        <ChromeReveal className="shrink-0 max-w-[60%]">
           <div className="flex flex-col items-end gap-1.5">
             <ToastStack />
             <ControlsCluster activePanel={activePanel} onOpenPanel={(p) => setActivePanel(p)} />
@@ -167,8 +177,23 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       {/* panels — rendered at top level outside ChromeReveal z-stack */}
       {activePanel !== "none" && (
         <>
-          <div className="fixed inset-0 z-[29]" onClick={() => setActivePanel("none")} style={{ background: "rgba(0,0,0,0.3)" }} />
-          <div className="fixed inset-y-0 right-0 w-full max-w-sm glass z-30 flex flex-col" style={{ background: "rgba(26,22,20,0.92)" }}>
+          <div
+            className="fixed inset-0 z-[29]"
+            onClick={() => setActivePanel("none")}
+            style={{
+              background: "rgba(0,0,0,0.3)",
+              opacity: panelOpen ? 1 : 0,
+              transition: "opacity 200ms ease-out",
+            }}
+          />
+          <div
+            className="fixed inset-y-0 right-0 w-full max-w-sm glass z-30 flex flex-col"
+            style={{
+              background: "rgba(26,22,20,0.92)",
+              transform: panelOpen ? "translateX(0)" : "translateX(100%)",
+              transition: "transform 300ms ease-out",
+            }}
+          >
             <div className="flex-1 overflow-y-auto px-4 py-4">
               {activePanel === "chat" && <ChatPanel onClose={() => setActivePanel("none")} />}
               {activePanel === "info" && <InfoPanel onClose={() => setActivePanel("none")} />}
