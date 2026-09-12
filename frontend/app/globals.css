@@ -81,6 +81,15 @@ body {
 }
 .pulse-amber { animation: pulse-amber 2s ease-in-out infinite; }
 
+/* themed scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(237,224,210,0.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(237,224,210,0.22); }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: rgba(237,224,210,0.12) transparent; }
+
 @media (prefers-reduced-motion: reduce) {
   .chrome { transition: opacity 0.2s linear; transform: none; }
   .eq-bar { animation: none; }

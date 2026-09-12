@@ -124,6 +124,14 @@ function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick:
   const isGrad = isGradientUrl(url);
   const gradCss = isGrad ? gradientCss(url) : null;
   const src = isGrad ? null : resolveAssetUrl(url);
+  const [imgErr, setImgErr] = useState(false);
+
+  useEffect(() => {
+    if (src) {
+      console.debug("[solace:FE] Tile image src", { url: url?.slice(0, 80), resolved: src.slice(0, 120) });
+    }
+  }, [src, url]);
+
   return (
     <button
       onClick={onClick}
@@ -135,8 +143,15 @@ function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick:
     >
       {isGrad && gradCss && <div className="absolute inset-0 w-full h-full" style={{ background: gradCss }} />}
       {isGrad && !gradCss && <div className="absolute inset-0 w-full h-full wallpaper" />}
-      {!isGrad && src && kind === "image" && <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" />}
-      {!isGrad && src && kind === "video" && <video src={src} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />}
+      {!isGrad && src && kind === "image" && !imgErr && (
+        <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" onError={() => setImgErr(true)} />
+      )}
+      {(!isGrad && !src || imgErr) && (
+        <div className="absolute inset-0 grid place-items-center text-[8px] opacity-40">no preview</div>
+      )}
+      {!isGrad && src && kind === "video" && (
+        <video src={src} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
+      )}
       <span className="absolute bottom-1 left-1 max-w-[calc(100%-8px)] text-[9px] opacity-80 px-1 text-left truncate z-10" style={{ background: "rgba(20,17,15,0.6)", borderRadius: 4 }}>{label}</span>
       {kind === "video" && !isGrad && (
         <span className="absolute top-1 left-1 text-[7px] opacity-70 flex items-center gap-0.5 z-10"><Video size={8} /> video</span>
