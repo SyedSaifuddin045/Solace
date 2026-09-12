@@ -5,7 +5,11 @@ import { ChromeReveal } from "@/components/room/ChromeReveal";
 import { TitleChip } from "@/components/room/TitleChip";
 import { SongWidget } from "@/components/room/SongWidget";
 import { UsersStack } from "@/components/room/UsersStack";
-import { ControlsCluster } from "@/components/room/ControlsCluster";
+import { ControlsCluster, type PanelKind } from "@/components/room/ControlsCluster";
+import { ChatPanel } from "@/components/panels/ChatPanel";
+import { InfoPanel } from "@/components/panels/InfoPanel";
+import { ThemePanel } from "@/components/panels/ThemePanel";
+import { WallpaperPanel } from "@/components/panels/WallpaperPanel";
 import { TimerCenter } from "@/components/room/TimerCenter";
 import { ToastStack } from "@/components/room/ToastStack";
 import { ReconnectOverlay } from "@/components/room/ReconnectOverlay";
@@ -27,6 +31,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const error = useRoomStore((s) => s.error);
 
   const [setupVisible, setSetupVisible] = useState(false);
+  const [activePanel, setActivePanel] = useState<PanelKind | "none">("none");
 
   useEffect(() => {
     // client-only mount check per spec: show setup overlay before entering
@@ -151,13 +156,28 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
         <ChromeReveal className="shrink-0">
           <div className="flex flex-col items-end gap-1.5">
             <ToastStack />
-            <ControlsCluster />
+            <ControlsCluster activePanel={activePanel} onOpenPanel={(p) => setActivePanel(p)} />
           </div>
         </ChromeReveal>
       </div>
 
       {/* timer center-top — special handling: hint persists when minimized+running */}
       <TimerCenter />
+
+      {/* panels — rendered at top level outside ChromeReveal z-stack */}
+      {activePanel !== "none" && (
+        <>
+          <div className="fixed inset-0 z-[29]" onClick={() => setActivePanel("none")} style={{ background: "rgba(0,0,0,0.3)" }} />
+          <div className="fixed inset-y-0 right-0 w-full max-w-sm glass z-30 flex flex-col" style={{ background: "rgba(26,22,20,0.92)" }}>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {activePanel === "chat" && <ChatPanel onClose={() => setActivePanel("none")} />}
+              {activePanel === "info" && <InfoPanel onClose={() => setActivePanel("none")} />}
+              {activePanel === "theme" && <ThemePanel onClose={() => setActivePanel("none")} />}
+              {activePanel === "wallpaper" && <WallpaperPanel onClose={() => setActivePanel("none")} />}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* overlays */}
       <ReconnectOverlay visible={!connected} />
