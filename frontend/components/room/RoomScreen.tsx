@@ -159,7 +159,12 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
       {/* chrome corners */}
       <ChromeReveal className="absolute top-3 sm:top-4 left-3 sm:left-5 z-20"><TitleChip /></ChromeReveal>
-      <ChromeReveal className="absolute top-3 sm:top-4 right-3 sm:right-5 z-20"><UsersStack /></ChromeReveal>
+      <div
+        className="transition-transform duration-300 ease-out"
+        style={{ transform: activePanel !== "none" ? "translateX(-25rem)" : "translateX(0)" }}
+      >
+        <ChromeReveal className="absolute top-3 sm:top-4 right-3 sm:right-5 z-20"><UsersStack /></ChromeReveal>
+      </div>
       {/* bottom controls — single render, shift left when panel opens */}
       <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
         <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget /></ChromeReveal>
