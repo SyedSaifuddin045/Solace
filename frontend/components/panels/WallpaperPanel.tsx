@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Upload, Volume2, VolumeX, X, Video } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
@@ -15,28 +15,17 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
   const [mutedVideos, setMutedVideos] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    console.debug("[solace:FE] WallpaperPanel wallpapers", {
-      count: wallpapers.length,
-      entries: wallpapers.map((w) => ({ id: w.id, url: w.url?.slice(0, 80), kind: w.kind, name: w.originalName })),
-    });
-  }, [wallpapers]);
-
   const setScene = (url: string | null, kind: "image" | "video") => {
-    console.debug("[solace:FE] wallpaper:set emit", { url: url?.slice(0, 120), kind });
     getSocket().emit("wallpaper:set", { url, kind });
   };
 
   const doUpload = async (file: File) => {
     if (!roomId) return;
-    console.debug("[solace:FE] wallpaper upload START", { roomId, name: file.name, size: file.size, type: file.type });
     setBusy(true);
     try {
       const up = await uploadWallpaper(roomId, file);
-      console.debug("[solace:FE] wallpaper upload SUCCESS", { url: up.url, kind: up.kind, size: up.size, resolved: resolveAssetUrl(up.url) });
       getSocket().emit("wallpaper:set", { url: up.url, kind: up.kind });
     } catch (e) {
-      console.debug("[solace:FE] wallpaper upload ERROR", { message: (e as Error).message });
       pushToast((e as Error).message, "err");
     } finally {
       setBusy(false);
@@ -62,7 +51,7 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
       <p className="text-[10px] opacity-50 mb-1.5">room library — max 3 uploads</p>
       <div className="grid grid-cols-2 gap-2 overflow-y-auto flex-1 content-start">
         {specials.map((sp) => (
-          <Tile key={sp.title} active={!current.url} onClick={() => setScene(sp.url, sp.kind)} label={sp.title} kind={sp.kind} url={null} />
+          <Tile key={sp.title} active={!current.url} onClick={() => setScene(sp.url, sp.kind)} label={sp.title} kind={sp.kind} url={sp.url} />
         ))}
         {wallpapers.map((w) => (
           <div key={w.id} className="relative group">
@@ -116,12 +105,6 @@ function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick:
   const gradCss = isGrad ? gradientCss(url) : null;
   const src = isGrad ? null : resolveAssetUrl(url);
   const [imgErr, setImgErr] = useState(false);
-
-  useEffect(() => {
-    if (src) {
-      console.debug("[solace:FE] Tile image src", { url: url?.slice(0, 80), resolved: src.slice(0, 120) });
-    }
-  }, [src, url]);
 
   return (
     <button
