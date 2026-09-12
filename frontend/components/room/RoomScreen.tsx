@@ -164,7 +164,14 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
         <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget /></ChromeReveal>
         <ChromeReveal className="shrink-0 max-w-[60%]">
-          <div className="flex flex-col items-end gap-1.5">
+          <div
+            className="flex flex-col items-end gap-1.5 transition-all duration-300"
+            style={
+              activePanel !== "none"
+                ? { position: "fixed", bottom: "1rem", left: "1rem", right: "auto", zIndex: 25 }
+                : undefined
+            }
+          >
             <ToastStack />
             <ControlsCluster activePanel={activePanel} onOpenPanel={(p) => setActivePanel(p)} />
           </div>
@@ -177,15 +184,6 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       {/* panels — rendered at top level outside ChromeReveal z-stack */}
       {activePanel !== "none" && (
         <>
-          <div
-            className="fixed inset-0 z-[29]"
-            onClick={() => setActivePanel("none")}
-            style={{
-              background: "rgba(0,0,0,0.3)",
-              opacity: panelOpen ? 1 : 0,
-              transition: "opacity 200ms ease-out",
-            }}
-          />
           <div
             className="fixed inset-y-0 right-0 w-full max-w-sm glass z-30 flex flex-col"
             style={{
