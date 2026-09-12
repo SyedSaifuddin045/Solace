@@ -50,18 +50,28 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
 
       <p className="text-[10px] opacity-50 mb-1.5">room library — max 3 uploads</p>
       <div className="grid grid-cols-2 gap-2 overflow-y-auto flex-1 content-start">
+        {/* default + gradient specials */}
         {specials.map((sp) => (
           <Tile key={sp.title} active={!current.url} onClick={() => setScene(sp.url, sp.kind)} label={sp.title} kind={sp.kind} url={sp.url} />
         ))}
+        {/* uploaded wallpapers — rendered inline like setup overlay */}
         {wallpapers.map((w) => (
           <div key={w.id} className="relative group">
-            <Tile
-              active={current.url === w.url}
+            <button
               onClick={() => setScene(w.url, w.kind)}
-              kind={w.kind}
-              label={w.originalName}
-              url={w.url}
-            />
+              className="aspect-square rounded-md overflow-hidden relative w-full"
+              style={{
+                border: current.url === w.url ? "2px solid var(--accent-amber)" : "1px solid rgba(237,224,210,0.1)",
+                background: "var(--depth-2)",
+              }}
+            >
+              {w.kind === "video" ? (
+                <video src={resolveAssetUrl(w.url) ?? undefined} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
+              ) : (
+                <img src={resolveAssetUrl(w.url) ?? undefined} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              )}
+              <span className="absolute bottom-1 left-1 max-w-[calc(100%-8px)] text-[9px] opacity-80 px-1 text-left truncate z-10" style={{ background: "rgba(20,17,15,0.6)", borderRadius: 4 }}>{w.originalName}</span>
+            </button>
             {w.kind === "video" && (
               <button
                 aria-label="toggle video sound"
@@ -103,8 +113,6 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
 function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick: () => void; kind: "image" | "video"; label: string; url: string | null }) {
   const isGrad = isGradientUrl(url);
   const gradCss = isGrad ? gradientCss(url) : null;
-  const src = isGrad ? null : resolveAssetUrl(url);
-  const [imgErr, setImgErr] = useState(false);
 
   return (
     <button
@@ -120,20 +128,6 @@ function Tile({ active, onClick, kind, label, url }: { active: boolean; onClick:
       {isGrad && !gradCss && <div className="absolute inset-0 w-full h-full wallpaper" />}
       {/* default dusk (url=null, not gradient) */}
       {!isGrad && !url && <div className="absolute inset-0 w-full h-full wallpaper" />}
-      {/* uploaded image */}
-      {!isGrad && src && kind === "image" && !imgErr && (
-        <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover"
-          onLoad={() => console.debug("[solace:FE] Tile img loaded", { url: url?.slice(0, 60) })}
-          onError={(e) => { console.debug("[solace:FE] Tile img FAILED", { url: url?.slice(0, 60), naturalWidth: (e.target as HTMLImageElement).naturalWidth }); setImgErr(true); }} />
-      )}
-      {/* uploaded video */}
-      {!isGrad && src && kind === "video" && (
-        <video src={src} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
-      )}
-      {/* error fallback only for uploads that have a URL but failed */}
-      {src && imgErr && (
-        <div className="absolute inset-0 grid place-items-center text-[8px] opacity-40">no preview</div>
-      )}
       <span className="absolute bottom-1 left-1 max-w-[calc(100%-8px)] text-[9px] opacity-80 px-1 text-left truncate z-10" style={{ background: "rgba(20,17,15,0.6)", borderRadius: 4 }}>{label}</span>
       {kind === "video" && !isGrad && (
         <span className="absolute top-1 left-1 text-[7px] opacity-70 flex items-center gap-0.5 z-10"><Video size={8} /> video</span>

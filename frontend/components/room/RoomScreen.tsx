@@ -179,8 +179,13 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
         </ChromeReveal>
       </div>
 
-      {/* timer center-top — special handling: hint persists when minimized+running */}
-      <TimerCenter />
+      {/* timer center-top — shifts left with panel like controls + users */}
+      <div
+        className="transition-transform duration-300 ease-out"
+        style={{ transform: activePanel !== "none" ? "translateX(-25rem)" : "translateX(0)" }}
+      >
+        <TimerCenter />
+      </div>
 
       {/* panels — rendered at top level outside ChromeReveal z-stack */}
       {activePanel !== "none" && (
