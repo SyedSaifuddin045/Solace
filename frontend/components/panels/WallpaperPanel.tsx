@@ -61,9 +61,6 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
     })),
   ];
 
-  const previewSrc = current.url && !isGradientUrl(current.url) ? resolveAssetUrl(current.url) : null;
-  const previewGrad = isGradientUrl(current.url) ? gradientCss(current.url) : null;
-
   return (
     <div className="p-4 h-full flex flex-col">
       <div className="flex items-center justify-between mb-3">
@@ -71,24 +68,8 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
         <button aria-label="Close" onClick={onClose}><X size={14} className="opacity-60" /></button>
       </div>
 
-      {/* preview of current wallpaper */}
-      <div className="w-full aspect-video rounded-lg overflow-hidden mb-3 relative" style={{ border: "1px solid rgba(237,224,210,0.1)", background: "var(--depth-2)" }}>
-        {previewGrad ? (
-          <div className="absolute inset-0 w-full h-full" style={{ background: previewGrad }} />
-        ) : previewSrc && current.kind === "video" ? (
-          <video src={previewSrc} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
-        ) : previewSrc ? (
-          <img src={previewSrc} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        ) : (
-          <div className="absolute inset-0 w-full h-full wallpaper" />
-        )}
-        <span className="absolute bottom-1.5 left-1.5 text-[9px] opacity-70 px-1.5 py-0.5 rounded" style={{ background: "rgba(20,17,15,0.6)" }}>
-          current scene
-        </span>
-      </div>
-
       <p className="text-[10px] opacity-50 mb-1.5">room library — max 3 uploads</p>
-      <div className="grid grid-cols-3 gap-2 overflow-y-auto flex-1 content-start">
+      <div className="grid grid-cols-2 gap-2 overflow-y-auto flex-1 content-start">
         {specials.map((sp) => (
           <Tile key={sp.title} active={!current.url} onClick={() => setScene(sp.url, sp.kind)} label={sp.title} kind={sp.kind} url={null} />
         ))}
