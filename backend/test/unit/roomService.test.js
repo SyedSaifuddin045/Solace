@@ -10,6 +10,7 @@ const {
     InvalidPayloadError,
     TargetNotInRoomError,
     NotHostError,
+    QueueFullError,
     MAX_ROOM_MEMBERS,
     MAX_ACTIVITY_HISTORY
 } = require("../../src/rooms/RoomService");
@@ -620,6 +621,65 @@ describe("RoomService", () => {
         test("returns null when socket not in any room", () => {
             service.createRoom("H", socketId);
             assert.equal(service.resolveRoomBySocket("stranger"), null);
+        });
+    });
+
+    describe("queue operations", () => {
+        let roomId;
+
+        beforeEach(() => {
+            const result = service.createRoom("Host", socketId);
+            roomId = result.roomId;
+        });
+
+        test("addToQueue appends track", () => {
+            const track = { url: "https://youtube.com/watch?v=abc" };
+            const { queue } = service.addToQueue(roomId, socketId, track);
+            assert.equal(queue.length, 1);
+            assert.equal(queue[0].url, track.url);
+        });
+
+        test("addToQueue rejects non-member", () => {
+            assert.throws(() => service.addToQueue(roomId, "outsider", { url: "https://x.com" }), NotInRoomError);
+        });
+
+        test("addToQueue rejects invalid track", () => {
+            assert.throws(() => service.addToQueue(roomId, socketId, null), InvalidPayloadError);
+            assert.throws(() => service.addToQueue(roomId, socketId, { url: 123 }), InvalidPayloadError);
+        });
+
+        test("addToQueue rejects when full (20)", () => {
+            for (let i = 0; i < 20; i++) {
+                service.addToQueue(roomId, socketId, { url: `https://x.com/${i}` });
+            }
+            assert.throws(() => service.addToQueue(roomId, socketId, { url: "https://x.com/20" }), QueueFullError);
+        });
+
+        test("removeFromQueue removes by index", () => {
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            service.addToQueue(roomId, socketId, { url: "https://b.com" });
+            const { queue } = service.removeFromQueue(roomId, socketId, 0);
+            assert.equal(queue.length, 1);
+            assert.equal(queue[0].url, "https://b.com");
+        });
+
+        test("removeFromQueue rejects bad index", () => {
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            assert.throws(() => service.removeFromQueue(roomId, socketId, 5), InvalidPayloadError);
+            assert.throws(() => service.removeFromQueue(roomId, socketId, -1), InvalidPayloadError);
+        });
+
+        test("clearQueue empties queue", () => {
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            service.addToQueue(roomId, socketId, { url: "https://b.com" });
+            const { queue } = service.clearQueue(roomId, socketId);
+            assert.equal(queue.length, 0);
+        });
+
+        test("queue persists in room state", () => {
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            const room = service.getRoom(roomId);
+            assert.equal(room.state.queue.length, 1);
         });
     });
 });
