@@ -11,6 +11,7 @@ import { InfoPanel } from "@/components/panels/InfoPanel";
 import { ThemePanel } from "@/components/panels/ThemePanel";
 import { WallpaperPanel } from "@/components/panels/WallpaperPanel";
 import { TrackPicker } from "@/components/room/TrackPicker";
+import { QueuePanel } from "@/components/room/QueuePanel";
 import { TimerCenter } from "@/components/room/TimerCenter";
 import { ToastStack } from "@/components/room/ToastStack";
 import { ReconnectOverlay } from "@/components/room/ReconnectOverlay";
@@ -35,6 +36,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const [activePanel, setActivePanel] = useState<PanelKind | "none">("none");
   const [panelOpen, setPanelOpen] = useState(false);
   const [trackPickerOpen, setTrackPickerOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
 
   useEffect(() => {
     // client-only mount check per spec: show setup overlay before entering
@@ -169,7 +171,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       </div>
       {/* bottom controls — single render, shift left when panel opens */}
       <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
-        <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget onOpenPicker={() => setTrackPickerOpen(true)} /></ChromeReveal>
+        <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget onOpenPicker={() => setTrackPickerOpen(true)} onOpenQueue={() => setQueueOpen(true)} /></ChromeReveal>
         <ChromeReveal className="shrink-0 max-w-[60%]">
           <div
             className="flex flex-col items-end gap-1.5 transition-transform duration-300 ease-out hidden sm:flex"
@@ -215,6 +217,15 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
       {/* track picker */}
       {trackPickerOpen && <TrackPicker onClose={() => setTrackPickerOpen(false)} />}
+
+      {/* queue panel */}
+      {queueOpen && (
+        <div className="fixed inset-0 z-30 grid place-items-center" style={{ background: "rgba(20,17,15,0.85)" }} onClick={() => setQueueOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()}>
+            <QueuePanel onClose={() => setQueueOpen(false)} />
+          </div>
+        </div>
+      )}
 
       {/* setup overlay */}
       {setupVisible && <RoomSetupOverlay onEnter={handleSetupEnter} />}

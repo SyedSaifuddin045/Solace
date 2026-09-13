@@ -15,11 +15,12 @@ function useNow(active: boolean) {
   return now;
 }
 
-export function SongWidget({ onOpenPicker }: { onOpenPicker?: () => void }) {
+export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () => void; onOpenQueue?: () => void }) {
   const track = useRoomStore((s) => s.state.playback.track);
   const status = useRoomStore((s) => s.state.playback.status);
   const position = useRoomStore((s) => s.state.playback.position);
   const updatedAt = useRoomStore((s) => s.state.playback.updatedAt);
+  const queue = useRoomStore((s) => s.state.queue);
   const [hover, setHover] = useState(false);
   const now = useNow(hover && status === "playing");
 
@@ -99,6 +100,15 @@ export function SongWidget({ onOpenPicker }: { onOpenPicker?: () => void }) {
             <p className="text-[12px] leading-tight max-w-[180px] truncate">{displayTitle}</p>
             <p className="text-[10px] opacity-50">{duration > 0 ? formatRemaining(livePos * 1000) : ""}</p>
           </div>
+          {queue.length > 0 && onOpenQueue && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenQueue(); }}
+              className="ml-auto rounded-full w-5 h-5 grid place-items-center text-[8px] font-bold shrink-0"
+              style={{ background: "rgba(224,164,88,0.2)", color: "var(--accent-amber)" }}
+            >
+              {queue.length}
+            </button>
+          )}
         </div>
       )}
     </div>
