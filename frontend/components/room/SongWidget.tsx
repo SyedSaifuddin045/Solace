@@ -1,11 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, Music } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { formatRemaining } from "@/lib/time";
 
-// no per-second updates when collapsed; only expand state ticks a local clock (cheap)
 function useNow(active: boolean) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -16,20 +15,24 @@ function useNow(active: boolean) {
   return now;
 }
 
-export function SongWidget() {
-  const playback = useRoomStore((s) => s.state.playback);
+export function SongWidget({ onOpenPicker }: { onOpenPicker?: () => void }) {
+  const track = useRoomStore((s) => s.state.playback.track);
+  const status = useRoomStore((s) => s.state.playback.status);
+  const position = useRoomStore((s) => s.state.playback.position);
+  const updatedAt = useRoomStore((s) => s.state.playback.updatedAt);
   const [hover, setHover] = useState(false);
-  const now = useNow(hover && playback.status === "playing");
+  const now = useNow(hover && status === "playing");
 
-  const trackLabel = playback.track?.url ? playback.track.url.split("/").pop() ?? playback.track.url : "ambient silence";
+  const livePos = status === "playing" ? position + (now - updatedAt) / 1000 : position;
+  const duration = track?.duration || 0;
+  const progress = duration > 0 ? Math.min(100, (livePos / duration) * 100) : 0;
 
-  // v1 note: contract has no tracking duration — the progress bar below assumes a
-  // 240s track for width only. Replace when set_track carries real duration.
-  const livePos = playback.status === "playing" ? playback.position + (now - playback.updatedAt) / 1000 : playback.position;
+  const displayTitle = track?.title || track?.url?.split("/").pop() || "ambient silence";
+  const displayArtist = track?.artist || "";
 
   const toggle = () => {
     const s = getSocket();
-    if (playback.status === "playing") s.emit("playback:pause");
+    if (status === "playing") s.emit("playback:pause");
     else s.emit("playback:play");
   };
 
@@ -41,27 +44,60 @@ export function SongWidget() {
     >
       {hover ? (
         <div className="min-w-[220px]">
-          <p className="text-[12px] truncate">{trackLabel}</p>
-          <div className="flex items-center gap-2 mt-1.5">
-            <button onClick={toggle} aria-label={playback.status === "playing" ? "Pause" : "Play"} className="grid place-items-center w-6 h-6 rounded-full" style={{ background: "rgba(224,164,88,0.16)", color: "var(--accent-amber)" }}>
-              {playback.status === "playing" ? <Pause size={12} /> : <Play size={12} />}
+          <div className="flex items-center gap-2.5 mb-2">
+            {/* Artwork */}
+            {track?.artwork ? (
+              <img src={track.artwork} alt="" className="w-10 h-10 rounded-md object-cover shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-md grid place-items-center shrink-0" style={{ background: "var(--depth-3)" }}>
+                <Music size={14} className="opacity-40" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-[12px] truncate leading-tight">{displayTitle}</p>
+              {displayArtist && <p className="text-[10px] opacity-50 truncate">{displayArtist}</p>}
+            </div>
+          </div>
+
+          {/* Progress */}
+          <div className="flex items-center gap-2">
+            <button onClick={toggle} aria-label={status === "playing" ? "Pause" : "Play"} className="grid place-items-center w-6 h-6 rounded-full shrink-0" style={{ background: "rgba(224,164,88,0.16)", color: "var(--accent-amber)" }}>
+              {status === "playing" ? <Pause size={12} /> : <Play size={12} />}
             </button>
             <div className="flex-1 h-[3px] rounded relative" style={{ background: "rgba(237,224,210,0.15)" }}>
-              <div className="h-full rounded" style={{ width: `${Math.min(100, (livePos / 240) * 100)}%`, background: "var(--accent-amber)" }} />
+              <div className="h-full rounded" style={{ width: `${progress}%`, background: "var(--accent-amber)" }} />
             </div>
-            <span className="text-[9px] opacity-60">{formatRemaining(livePos * 1000)}</span>
+            <span className="text-[9px] opacity-60 tabular-nums">
+              {duration > 0 ? `${formatRemaining(livePos * 1000)}` : "0:00"}
+            </span>
           </div>
+
+          {/* Change track */}
+          {onOpenPicker && (
+            <button
+              onClick={onOpenPicker}
+              className="mt-2 text-[9px] opacity-40 hover:opacity-70 transition-opacity"
+              style={{ color: "var(--accent-amber)" }}
+            >
+              change track
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex items-center gap-3">
-          <div className="flex items-end gap-[3px] h-4">
-            {[0, 1, 2, 3].map((i) => (
-              <span key={i} className="eq-bar w-[3px] h-full rounded-sm" style={{ background: "var(--accent-amber)", animationDelay: `${i * 0.12}s`, transform: playback.status === "playing" ? undefined : "scaleY(0.15)" }} />
-            ))}
-          </div>
+          {/* Eq bars or artwork */}
+          {track?.artwork ? (
+            <img src={track.artwork} alt="" className="w-8 h-8 rounded-sm object-cover shrink-0" />
+          ) : (
+            <div className="flex items-end gap-[3px] h-4">
+              {[0, 1, 2, 3].map((i) => (
+                <span key={i} className="eq-bar w-[3px] h-full rounded-sm" style={{ background: "var(--accent-amber)", animationDelay: `${i * 0.12}s`, transform: status === "playing" ? undefined : "scaleY(0.15)" }} />
+              ))}
+            </div>
+          )}
           <div>
-            <p className="text-[12px] leading-tight max-w-[180px] truncate">{trackLabel}</p>
-            <p className="text-[10px] opacity-50">{formatRemaining(livePos * 1000)}</p>
+            <p className="text-[12px] leading-tight max-w-[180px] truncate">{displayTitle}</p>
+            <p className="text-[10px] opacity-50">{duration > 0 ? formatRemaining(livePos * 1000) : ""}</p>
           </div>
         </div>
       )}
