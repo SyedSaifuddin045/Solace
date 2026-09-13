@@ -17,6 +17,7 @@ export interface TimerState { status: "idle" | "running" | "paused"; durationMs:
 export interface Member { socketId: string; displayName: string; isHost: boolean; audioOn: boolean; videoOn: boolean; avatar?: string | null }
 export interface RoomState {
   playback: Playback;
+  queue: Track[];
   wallpaper: WallpaperState;
   wallpapers: UploadMeta[];
   activity: ActivityEntry[];
@@ -27,6 +28,7 @@ export interface RoomError { code: string; message: string }
 
 export const EMPTY_STATE: RoomState = {
   playback: { status: "paused", track: null, position: 0, updatedAt: 0 },
+  queue: [],
   wallpaper: { url: null, kind: "image", changedBy: null, updatedAt: 0 },
   wallpapers: [],
   activity: [],
@@ -77,6 +79,8 @@ function eventSummary(name: string, payload: unknown): unknown {
       return { url: p?.url, kind: p?.kind, changedBy: p?.changedBy, updatedAt: p?.updatedAt };
     case "timer:state":
       return { status: p?.status, durationMs: p?.durationMs, remainingMs: p?.remainingMs, endsAt: p?.endsAt, startedBy: p?.startedBy };
+    case "playback:queue_state":
+      return { queueLength: (p as { queue?: unknown[] })?.queue?.length };
     case "wallpaper:uploads":
       return { uploadsCount: p?.uploads?.length, items: p?.uploads?.map((u) => ({ id: u?.id, kind: u?.kind, url: u?.url })) };
     default:
@@ -161,6 +165,11 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
       case "timer:state": {
         const p = payload as TimerState;
         set({ state: { ...s.state, timer: p } });
+        break;
+      }
+      case "playback:queue_state": {
+        const p = payload as { queue: Track[] };
+        set({ state: { ...s.state, queue: p.queue } });
         break;
       }
       case "room:error": {

@@ -3,6 +3,7 @@ import { useRoomStore, type Member } from "@/lib/store";
 
 beforeEach(() => useRoomStore.setState({ roomId: null, members: [], error: null, connected: false, pendingTimerMinutes: null, state: {
   playback: { status: "paused", track: null, position: 0, updatedAt: 0 },
+  queue: [],
   wallpaper: { url: null, kind: "image", changedBy: null, updatedAt: 0 },
   wallpapers: [],
   activity: [],
