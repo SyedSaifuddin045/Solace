@@ -11,6 +11,7 @@ const MAX_ROOM_TITLE_LENGTH = 60;
 const MIN_TIMER_MINUTES = 1;
 const MAX_TIMER_MINUTES = 180;
 const PLAYBACK_STATUSES = ["playing", "paused"];
+const MAX_QUEUE_SIZE = 20;
 
 function coerceBoolean(value, field) {
     if (value === true || value === false) return value;
@@ -74,6 +75,14 @@ class NotHostError extends Error {
         super(message);
         this.name = "NotHostError";
         this.code = "NOT_HOST";
+    }
+}
+
+class QueueFullError extends Error {
+    constructor(message = "Queue is full (max 20)") {
+        super(message);
+        this.name = "QueueFullError";
+        this.code = "QUEUE_FULL";
     }
 }
 
@@ -168,6 +177,36 @@ class RoomService {
 
         room.state.playback = change;
         return { room, change };
+    }
+
+    addToQueue(roomId, socketId, track) {
+        const room = this._assertRoom(roomId);
+        this._assertMember(room, socketId);
+        if (!track || typeof track !== "object" || typeof track.url !== "string") {
+            throw new InvalidPayloadError("track must be an object with a url string");
+        }
+        if (room.state.queue.length >= MAX_QUEUE_SIZE) {
+            throw new QueueFullError();
+        }
+        room.state.queue.push(track);
+        return { room, queue: room.state.queue };
+    }
+
+    removeFromQueue(roomId, socketId, index) {
+        const room = this._assertRoom(roomId);
+        this._assertMember(room, socketId);
+        if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= room.state.queue.length) {
+            throw new InvalidPayloadError("index must be a valid queue index");
+        }
+        room.state.queue.splice(index, 1);
+        return { room, queue: room.state.queue };
+    }
+
+    clearQueue(roomId, socketId) {
+        const room = this._assertRoom(roomId);
+        this._assertMember(room, socketId);
+        room.state.queue = [];
+        return { room, queue: room.state.queue };
     }
 
     setWallpaper(roomId, socketId, url, kind) {
@@ -356,5 +395,6 @@ module.exports.NotInRoomError = NotInRoomError;
 module.exports.TargetNotInRoomError = TargetNotInRoomError;
 module.exports.InvalidPayloadError = InvalidPayloadError;
 module.exports.NotHostError = NotHostError;
+module.exports.QueueFullError = QueueFullError;
 module.exports.MAX_ROOM_MEMBERS = MAX_ROOM_MEMBERS;
 module.exports.MAX_ACTIVITY_HISTORY = MAX_ACTIVITY_HISTORY;
