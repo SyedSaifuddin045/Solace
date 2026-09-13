@@ -23,6 +23,7 @@ import { loadPrefs } from "@/lib/prefs";
 import { initRtc, startSpeakingDetection, stopRtc } from "@/lib/rtc";
 import { resolveAssetUrl } from "@/lib/upload";
 import { isGradientUrl, gradientCss } from "@/lib/wallpaper";
+import { useAutoAdvance } from "@/hooks/useAutoAdvance";
 
 export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const params = useParams<{ roomId: string }>();
@@ -37,6 +38,8 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [trackPickerOpen, setTrackPickerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+
+  useAutoAdvance();
 
   useEffect(() => {
     // client-only mount check per spec: show setup overlay before entering
