@@ -45,6 +45,14 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
+  const handleAddToQueue = () => {
+    if (!preview) return;
+    getSocket().emit("playback:queue_add", { track: preview });
+    pushToast("added to queue", "ok");
+    setPreview(null);
+    setUrl("");
+  };
+
   const formatDuration = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -143,7 +151,15 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
             className="flex-1 rounded-full px-4 py-2 text-[11px] font-medium disabled:opacity-50"
             style={{ background: "var(--accent-amber)", color: "#14110F" }}
           >
-            set track
+            play now
+          </button>
+          <button
+            onClick={handleAddToQueue}
+            disabled={!preview}
+            className="flex-1 rounded-full px-4 py-2 text-[11px] font-medium disabled:opacity-50"
+            style={{ background: "rgba(224,164,88,0.16)", color: "var(--accent-amber)" }}
+          >
+            add to queue
           </button>
           {track && (
             <button
