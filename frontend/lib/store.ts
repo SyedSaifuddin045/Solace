@@ -1,7 +1,14 @@
 import { create } from "zustand";
 
 export type PlaybackStatus = "playing" | "paused";
-export interface Track { url: string }
+export interface Track {
+  url: string;
+  title?: string;
+  artist?: string;
+  artwork?: string;
+  duration?: number;
+  provider?: string;
+}
 export interface Playback { status: PlaybackStatus; track: Track | null; position: number; updatedAt: number }
 export interface WallpaperState { url: string | null; kind: "image" | "video"; changedBy: string | null; updatedAt: number }
 export interface UploadMeta { id: string; url: string; kind: "image" | "video"; contentType: string; size: number; originalName: string; uploadedBy: string; uploadedAt: number }
