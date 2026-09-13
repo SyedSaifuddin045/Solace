@@ -39,6 +39,10 @@ function createPlaybackHandler(io, roomService) {
         io.to(room.id).emit(SERVER.ROOM_ACTIVITY, { entry });
     }
 
+    function broadcastQueue(room, queue) {
+        io.to(room.id).emit(SERVER.PLAYBACK_QUEUE_STATE, { queue });
+    }
+
     return {
         handlePlay(socket, payload) {
             const room = assertRoom(socket);
@@ -95,6 +99,43 @@ function createPlaybackHandler(io, roomService) {
                 });
                 broadcast(updatedRoom, change, socket.id);
                 appendActivity(updatedRoom, socket, change.track ? `set track ${change.track.url}` : "cleared track");
+            } catch (err) {
+                emitError(socket, err);
+            }
+        },
+
+        handleQueueAdd(socket, payload) {
+            const room = assertRoom(socket);
+            if (!room) return;
+            try {
+                const track = payload && payload.track;
+                const { room: updatedRoom, queue } = roomService.addToQueue(room.id, socket.id, track);
+                broadcastQueue(updatedRoom, queue);
+                appendActivity(updatedRoom, socket, `added to queue: ${track.url}`);
+            } catch (err) {
+                emitError(socket, err);
+            }
+        },
+
+        handleQueueRemove(socket, payload) {
+            const room = assertRoom(socket);
+            if (!room) return;
+            try {
+                const index = payload && payload.index;
+                const { room: updatedRoom, queue } = roomService.removeFromQueue(room.id, socket.id, index);
+                broadcastQueue(updatedRoom, queue);
+            } catch (err) {
+                emitError(socket, err);
+            }
+        },
+
+        handleQueueClear(socket) {
+            const room = assertRoom(socket);
+            if (!room) return;
+            try {
+                const { room: updatedRoom, queue } = roomService.clearQueue(room.id, socket.id);
+                broadcastQueue(updatedRoom, queue);
+                appendActivity(updatedRoom, socket, "cleared queue");
             } catch (err) {
                 emitError(socket, err);
             }

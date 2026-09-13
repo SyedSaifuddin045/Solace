@@ -17,7 +17,10 @@ const CLIENT = {
     RTC_MEDIA: "rtc:media",
     RTC_OFFER: "rtc:offer",
     RTC_ANSWER: "rtc:answer",
-    RTC_ICE: "rtc:ice"
+    RTC_ICE: "rtc:ice",
+    PLAYBACK_QUEUE_ADD: "playback:queue_add",
+    PLAYBACK_QUEUE_REMOVE: "playback:queue_remove",
+    PLAYBACK_QUEUE_CLEAR: "playback:queue_clear"
 };
 
 const SERVER = {
@@ -31,6 +34,7 @@ const SERVER = {
     TIMER_STATE: "timer:state",
     TIMER_COMPLETE: "timer:complete",
     PLAYBACK_STATE: "playback:state",
+    PLAYBACK_QUEUE_STATE: "playback:queue_state",
     WALLPAPER_STATE: "wallpaper:state",
     WALLPAPER_UPLOADS: "wallpaper:uploads",
     RTC_CONFIG: "rtc:config",
