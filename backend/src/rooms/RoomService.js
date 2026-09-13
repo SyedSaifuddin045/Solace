@@ -148,8 +148,11 @@ class RoomService {
         if (status !== undefined && !PLAYBACK_STATUSES.includes(status)) {
             throw new InvalidPayloadError("status must be 'playing' or 'paused'");
         }
-        if (track !== undefined && track !== null && !(typeof track === "object" && typeof track.url === "string")) {
-            throw new InvalidPayloadError("track must be null or an object with a url string");
+        if (track !== undefined && track !== null) {
+            if (typeof track !== "object" || typeof track.url !== "string") {
+                throw new InvalidPayloadError("track must be null or an object with a url string");
+            }
+            // Allow optional metadata fields (title, artist, artwork, duration, provider)
         }
         if (position !== undefined && (typeof position !== "number" || !Number.isFinite(position) || position < 0)) {
             throw new InvalidPayloadError("position must be a non-negative number");
