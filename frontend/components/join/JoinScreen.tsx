@@ -20,7 +20,8 @@ export function JoinScreen() {
   const [avatar, setAvatar] = useState<string | null>(() => loadPrefs().avatar);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
-  const [passwordHint, setPasswordHint] = useState(false);
+  const [roomProtected, setRoomProtected] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"join" | "create" | null>(null);
   const [recentRooms, setRecentRooms] = useState<string[]>([]);
@@ -42,6 +43,20 @@ export function JoinScreen() {
     commitPrefs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, avatar]);
+
+  useEffect(() => {
+    if (code.trim().length !== 6) { setRoomProtected(false); return; }
+    setCreating(false);
+    const socket = getSocket();
+    const onResult = (p?: { roomId: string; protected: boolean }) => {
+      if (p && p.roomId === code) setRoomProtected(!!p.protected);
+    };
+    const onErr = () => { setRoomProtected(false); };
+    socket.on("room:check_result", onResult);
+    socket.on("room:error", onErr);
+    socket.emit("room:check", { roomId: code });
+    return () => { socket.off("room:check_result", onResult); socket.off("room:error", onErr); };
+  }, [code]);
 
   const routeToRoom = (roomId: string) => {
     touchRecentRoom(roomId);
@@ -79,7 +94,7 @@ export function JoinScreen() {
       socket.off("room:error", onError as never);
       setBusy(null);
       console.debug("[solace:FE] join room:error received", { code: p?.code, message: p?.message });
-      if (p?.code === "ROOM_PASSWORD_REQUIRED") setPasswordHint(true);
+      if (p?.code === "ROOM_PASSWORD_REQUIRED") setRoomProtected(true);
       setError(userMessage(p?.code ?? "", p?.message ?? ""));
       useRoomStore.getState().clearError();
     };
@@ -91,6 +106,7 @@ export function JoinScreen() {
 
   const doCreate = () => {
     if (busy) return;
+    if (!creating) { setCreating(true); setError(null); return; }
     console.debug("[solace:FE] doCreate", { busy, name });
     commitPrefs();
     setBusy("create");
@@ -154,19 +170,22 @@ export function JoinScreen() {
           />
         </div>
 
-        <div className="mt-3 text-left">
-          <label className="text-[10px] opacity-50 uppercase tracking-widest flex items-center gap-1">
-            <Lock size={9} /> password {passwordHint && <span style={{ color: "var(--accent-amber)" }}>— required for this room</span>}
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="optional · 4–32 chars"
-            className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none"
-            style={{ background: "rgba(20,17,15,0.4)" }}
-          />
-        </div>
+        {(roomProtected || creating) && (
+          <div className="mt-3 text-left">
+            <label className="text-[10px] opacity-50 uppercase tracking-widest flex items-center gap-1">
+              <Lock size={9} /> password
+              {creating && <span style={{ color: "var(--accent-amber)" }}>— optional, protects your room</span>}
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={creating ? "optional · 4–32 chars" : "required · 4–32 chars"}
+              className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none"
+              style={{ background: "rgba(20,17,15,0.4)" }}
+            />
+          </div>
+        )}
 
         {error && (
           <p className="mt-3 text-[11px]" style={{ color: "var(--status-error)" }}>{error}</p>
@@ -186,7 +205,7 @@ export function JoinScreen() {
             disabled={busy !== null}
             className="hairline rounded-full px-5 py-2 text-[12px] flex items-center gap-1.5 disabled:opacity-50"
           >
-            <Plus size={12} /> {busy === "create" ? "creating…" : "Create room"}
+            <Plus size={12} /> {busy === "create" ? "creating…" : creating ? "Set password & create" : "Create room"}
           </button>
         </div>
 
