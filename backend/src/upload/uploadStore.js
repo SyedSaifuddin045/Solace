@@ -45,7 +45,12 @@ function assertInsideRoot(root, absPath) {
 
 function createUploadStore() {
     const root = ROOT();
-    fs.rmSync(root, { recursive: true, force: true });
+    // Wipe contents (not the dir itself — Docker volume mount breaks rmSync on root)
+    if (fs.existsSync(root)) {
+        for (const entry of fs.readdirSync(root)) {
+            fs.rmSync(path.join(root, entry), { recursive: true, force: true });
+        }
+    }
     fs.mkdirSync(root, { recursive: true });
 
     function save(roomId, fileName, buffer) {
