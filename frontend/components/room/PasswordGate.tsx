@@ -21,6 +21,11 @@ export function PasswordGate({ roomId }: { roomId: string }) {
     if (joined && password) writeRoomPassword(roomId, password);
   }, [joined, password, roomId]);
 
+  // a fresh room:error means the previous attempt failed — re-enable submit
+  useEffect(() => {
+    if (error) setBusy(false);
+  }, [error]);
+
   const submit = () => {
     if (busy || !password) return;
     setBusy(true);
