@@ -200,10 +200,10 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
       {/* timer center-top — centers in available space when panel opens */}
       <div
-        className="absolute inset-0 pointer-events-none transition-[right] duration-300 ease-out"
+        className="absolute top-0 left-0 pointer-events-none transition-[right] duration-300 ease-out"
         style={{ right: activePanel !== "none" ? "25rem" : "0" }}
       >
-        <div className="relative h-full flex justify-center pointer-events-auto">
+        <div className="flex justify-center w-screen pointer-events-auto">
           <TimerCenter />
         </div>
       </div>

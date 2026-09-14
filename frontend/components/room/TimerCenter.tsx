@@ -70,6 +70,13 @@ export function TimerCenter() {
     }
   }, [hintVisible, running, idle, minimized, timer.status]);
 
+  // Auto-minimize when idle
+  useEffect(() => {
+    if (idle && mounted && !minimized && timer.status === "idle") {
+      setMinimized(true);
+    }
+  }, [idle, mounted, minimized, timer.status]);
+
   // Auto-expand when timer completes while minimized (not on pause)
   useEffect(() => {
     if (minimized && timer.status === "idle" && timer.remainingMs === 0 && timer.durationMs > 0) {

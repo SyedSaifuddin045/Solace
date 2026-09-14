@@ -77,12 +77,12 @@ export function MediaControls() {
 
       {confirmLeave && (
         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 glass rounded-xl px-4 py-3 flex flex-col items-center gap-2 min-w-[140px] z-50" style={{ background: "rgba(26,22,20,0.92)" }}>
-          <p className="text-[11px] opacity-60">leave room?</p>
+          <p className="text-[13px] opacity-70">leave room?</p>
           <div className="flex gap-2 w-full">
-            <button onClick={leave} className="flex-1 rounded-lg px-3 py-1.5 text-[10px] font-medium" style={{ background: "rgba(201,124,110,0.16)", color: "var(--status-error)" }}>
+            <button onClick={leave} className="flex-1 rounded-lg px-3 py-1.5 text-[12px] font-medium" style={{ background: "rgba(201,124,110,0.16)", color: "var(--status-error)" }}>
               leave
             </button>
-            <button onClick={() => setConfirmLeave(false)} className="flex-1 hairline rounded-lg px-3 py-1.5 text-[10px] opacity-70">
+            <button onClick={() => setConfirmLeave(false)} className="flex-1 hairline rounded-lg px-3 py-1.5 text-[12px] opacity-70">
               stay
             </button>
           </div>
