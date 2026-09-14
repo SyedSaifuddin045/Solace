@@ -91,34 +91,19 @@ async function resolveYouTube(url) {
     if (cached) return { ...cached, url: canonical };
 
     try {
-        const data = await postJSON("https://www.youtube.com/youtubei/v1/player", {
-            videoId,
-            context: {
-                client: {
-                    clientName: "ANDROID_VR",
-                    clientVersion: "1.60.19",
-                    androidSdkVersion: 32,
-                    hl: "en",
-                    gl: "US",
-                },
-            },
-        });
-
-        const details = data.videoDetails || {};
+        const data = await fetchJSON(`https://www.youtube.com/oembed?url=${encodeURIComponent(canonical)}&format=json`);
         const result = {
             url: canonical,
-            title: details.title || null,
-            artist: details.author || null,
-            artwork: details.thumbnail && details.thumbnail.thumbnails
-                ? (details.thumbnail.thumbnails.pop() || {}).url || null
-                : null,
-            duration: details.lengthSeconds ? Number(details.lengthSeconds) : null,
+            title: data.title || null,
+            artist: data.author_name || null,
+            artwork: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+            duration: null,
             provider: "youtube",
         };
         cacheSet(cacheKey, result);
         return result;
     } catch (err) {
-        console.log("[solace:BE] resolveYouTube InnerTube failed, returning minimal", { videoId, error: err.message });
+        console.log("[solace:BE] resolveYouTube oEmbed failed, returning minimal", { videoId, error: err.message });
         return {
             url: canonical,
             title: null,

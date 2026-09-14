@@ -24,6 +24,7 @@ import { initRtc, startSpeakingDetection, stopRtc } from "@/lib/rtc";
 import { resolveAssetUrl } from "@/lib/upload";
 import { isGradientUrl, gradientCss } from "@/lib/wallpaper";
 import { useAutoAdvance } from "@/hooks/useAutoAdvance";
+import { VideoPlayer } from "@/components/room/VideoPlayer";
 
 export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const params = useParams<{ roomId: string }>();
@@ -166,6 +167,11 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
       {/* chrome corners */}
       <ChromeReveal className="absolute top-3 sm:top-4 left-3 sm:left-5 z-20"><TitleChip /></ChromeReveal>
+
+      {/* video player — centered when a track is set */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+        <VideoPlayer />
+      </div>
       <div
         className="transition-transform duration-300 ease-out"
         style={{ transform: activePanel !== "none" ? "translateX(-25rem)" : "translateX(0)" }}
