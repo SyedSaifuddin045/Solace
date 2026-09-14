@@ -1,16 +1,13 @@
 "use client";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { useRoomStore } from "@/lib/store";
+import { BACKEND_URL } from "@/lib/socket";
 
 /**
- * Audio player using HTML5 <audio> element with raw audio URL from yt-dlp.
+ * Audio player using HTML5 <audio> element with proxied audio URL.
  *
- * Sync model:
- * - Server broadcasts { position, updatedAt } for play/pause/seek/set_track
- * - On play: audio.currentTime = position + elapsed, audio.play()
- * - On pause: audio.pause(), store current position
- * - On seek: audio.currentTime = newPosition
- * - Progress: SongWidget reads audio.currentTime via a shared ref
+ * Audio is fetched through backend proxy to avoid CORS issues with googlevideo.com.
+ * Sync: server broadcasts { position, updatedAt } → audio.currentTime = position + elapsed.
  */
 export function AudioPlayer() {
   const track = useRoomStore((s) => s.state.playback.track);
@@ -19,14 +16,16 @@ export function AudioPlayer() {
   const updatedAt = useRoomStore((s) => s.state.playback.updatedAt);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastStatusRef = useRef<string>("");
-  const seekingRef = useRef(false);
 
-  const audioUrl = track?.audioUrl || null;
+  // Build proxied audio URL
+  const rawAudioUrl = track?.audioUrl || null;
+  const audioUrl = rawAudioUrl
+    ? `${BACKEND_URL}/track/proxy?url=${encodeURIComponent(rawAudioUrl)}`
+    : null;
 
   // Create audio element on mount
   useEffect(() => {
     const audio = new Audio();
-    audio.crossOrigin = "anonymous";
     audio.preload = "auto";
     audioRef.current = audio;
 
@@ -52,7 +51,6 @@ export function AudioPlayer() {
       audio.src = "";
       return;
     }
-    // Only reload if URL changed
     if (audio.src !== audioUrl) {
       audio.src = audioUrl;
       audio.load();
@@ -69,15 +67,11 @@ export function AudioPlayer() {
     lastStatusRef.current = cmd;
 
     if (cmd === "play") {
-      // Compute correct position
       const elapsed = (Date.now() - updatedAt) / 1000;
       const targetTime = Math.max(0, position + elapsed);
-
-      // Seek if needed (within 2s tolerance)
       if (Math.abs(audio.currentTime - targetTime) > 2) {
         audio.currentTime = targetTime;
       }
-
       audio.play().catch(() => {
         console.debug("[solace:FE] audio play blocked — needs user gesture");
       });
@@ -86,26 +80,19 @@ export function AudioPlayer() {
     }
   }, [status, audioUrl, position, updatedAt]);
 
-  // Handle seek events (position changes while playing)
+  // Handle seek events
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !audioUrl || status !== "playing") return;
-
-    // Skip if this is the initial load (handled above)
     if (lastStatusRef.current !== "play") return;
 
     const elapsed = (Date.now() - updatedAt) / 1000;
     const targetTime = Math.max(0, position + elapsed);
-
-    // Only seek if significantly different (> 3s)
     if (Math.abs(audio.currentTime - targetTime) > 3) {
-      seekingRef.current = true;
       audio.currentTime = targetTime;
-      seekingRef.current = false;
     }
   }, [position, updatedAt, status, audioUrl]);
 
-  // Nothing to render — audio element is in-memory only
   return null;
 }
 
