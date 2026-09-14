@@ -1,8 +1,10 @@
+const crypto = require("node:crypto");
 const Room = require("./Room");
 
 // A-Z0-9 minus ambiguous chars 0, O, 1, I
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
+const MAX_ROOMS = 1000;
 
 class MemoryRoomStore {
     constructor() {
@@ -14,13 +16,16 @@ class MemoryRoomStore {
         do {
             code = Array.from(
                 { length: CODE_LENGTH },
-                () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]
+                () => CODE_ALPHABET[crypto.randomInt(0, CODE_ALPHABET.length)]
             ).join("");
         } while (this.rooms.has(code));
         return code;
     }
 
     create(roomId) {
+        if (this.rooms.size >= MAX_ROOMS) {
+            throw new Error("MAX_ROOMS_REACHED");
+        }
         const id = roomId || this._generateCode();
         const room = new Room(id);
         this.rooms.set(id, room);

@@ -14,7 +14,8 @@ const {
     PasswordRequiredError,
     WrongPasswordError,
     MAX_ROOM_MEMBERS,
-    MAX_ACTIVITY_HISTORY
+    MAX_ACTIVITY_HISTORY,
+    MAX_TRACK_OBJECT_BYTES
 } = require("../../src/rooms/RoomService");
 
 function freshStore() {
@@ -67,7 +68,7 @@ describe("RoomService", () => {
         });
 
         test("missing room -> RoomNotFoundError", () => {
-            assert.throws(() => service.joinRoom("NOPE", "s-x", "Bob"), RoomNotFoundError);
+            assert.throws(() => service.joinRoom("ZZZZZZ", "s-x", "Bob"), RoomNotFoundError);
         });
 
         test("full room -> RoomFullError", () => {
@@ -95,12 +96,27 @@ describe("RoomService", () => {
         });
 
         test("missing room -> RoomNotFoundError", () => {
-            assert.throws(() => service.leaveRoom("NOPE", socketId), RoomNotFoundError);
+            assert.throws(() => service.leaveRoom("ZZZZZZ", socketId), RoomNotFoundError);
         });
 
         test("non-member -> NotInRoomError", () => {
             const { roomId } = service.createRoom("H", socketId);
             assert.throws(() => service.leaveRoom(roomId, "stranger"), NotInRoomError);
+        });
+
+        test("reclaims room when last member leaves", () => {
+            const { roomId } = service.createRoom("H", socketId);
+            assert.ok(service.getRoom(roomId));
+            service.leaveRoom(roomId, socketId);
+            assert.throws(() => service.getRoom(roomId), RoomNotFoundError);
+        });
+
+        test("does not reclaim room when members remain", () => {
+            const { roomId } = service.createRoom("H", socketId);
+            service.joinRoom(roomId, "j2", "Guest");
+            service.leaveRoom(roomId, socketId);
+            assert.ok(service.getRoom(roomId));
+            assert.equal(service.getRoom(roomId).members.has("j2"), true);
         });
     });
 
@@ -117,7 +133,7 @@ describe("RoomService", () => {
         });
 
         test("missing room -> RoomNotFoundError", () => {
-            assert.throws(() => service.getState("NOPE"), RoomNotFoundError);
+            assert.throws(() => service.getState("ZZZZZZ"), RoomNotFoundError);
         });
     });
 
@@ -169,7 +185,7 @@ describe("RoomService", () => {
         });
 
         test("missing room -> RoomNotFoundError", () => {
-            assert.throws(() => service.setPlayback("NOPE", socketId, { status: "playing" }), RoomNotFoundError);
+            assert.throws(() => service.setPlayback("ZZZZZZ", socketId, { status: "playing" }), RoomNotFoundError);
         });
     });
 
@@ -318,7 +334,7 @@ describe("RoomService", () => {
         });
 
         test("missing room -> RoomNotFoundError", () => {
-            assert.throws(() => service.sendActivity("NOPE", socketId, "hi"), RoomNotFoundError);
+            assert.throws(() => service.sendActivity("ZZZZZZ", socketId, "hi"), RoomNotFoundError);
         });
 
         test("non-member -> NotInRoomError", () => {
@@ -399,7 +415,7 @@ describe("RoomService", () => {
         });
 
         test("missing room -> RoomNotFoundError", () => {
-            assert.throws(() => service.setMedia("NOPE", socketId, mediaArgs), RoomNotFoundError);
+            assert.throws(() => service.setMedia("ZZZZZZ", socketId, mediaArgs), RoomNotFoundError);
         });
 
         test("non-member -> TargetNotInRoomError", () => {
@@ -426,7 +442,7 @@ describe("RoomService", () => {
 
         test("missing room -> RoomNotFoundError", () => {
             assert.throws(
-                () => service.setTitle("NOPE", socketId, { title: "x" }),
+                () => service.setTitle("ZZZZZZ", socketId, { title: "x" }),
                 RoomNotFoundError
             );
         });
@@ -502,10 +518,18 @@ describe("RoomService", () => {
             const cancel = () => { pending = null; };
             const s = new RoomService(undefined, { now: clock.now, schedule, cancel });
             const rooms = new Map();
+            const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
             s.store = {
                 all: () => Array.from(rooms.values()),
                 get: (id) => rooms.get(id) || null,
-                create: () => { const r = new Room("R" + (rooms.size + 1)); rooms.set(r.id, r); return r; }
+                create: () => {
+                    let n = rooms.size + 1;
+                    let suffix = "";
+                    do { suffix = CODE_CHARS[n % 32] + suffix; n = Math.floor(n / 32); } while (n > 0);
+                    const r = new Room("R" + suffix.padStart(5, "A"));
+                    rooms.set(r.id, r);
+                    return r;
+                }
             };
             return { s, clock, sp: () => pending, fire: () => { if (pending) { const p = pending; pending = null; p.fn(); } } };
         }
@@ -610,7 +634,7 @@ describe("RoomService", () => {
         });
 
         test("missing room -> RoomNotFoundError", () => {
-            assert.throws(() => service.getRoom("NOPE"), RoomNotFoundError);
+            assert.throws(() => service.getRoom("ZZZZZZ"), RoomNotFoundError);
         });
     });
 
@@ -757,6 +781,39 @@ describe("RoomService", () => {
             const { roomId: pubId } = service.createRoom("Public", "pub_sock");
             const room = service.joinRoom(pubId, "pub_join", "Joiner");
             assert.equal(room.members.has("pub_join"), true);
+        });
+    });
+
+    describe("security hardening", () => {
+        test("InvalidPayloadError for malformed roomId", () => {
+            assert.throws(() => service.getRoom("short"), InvalidPayloadError);
+            assert.throws(() => service.getRoom("../../etc"), InvalidPayloadError);
+            assert.throws(() => service.getRoom("000000"), InvalidPayloadError); // 0 not in alphabet
+            assert.throws(() => service.getRoom("NOPE!"), InvalidPayloadError);
+        });
+
+        test("appendActivity escapes HTML in detail", () => {
+            const { roomId } = service.createRoom("Host", socketId);
+            const { entry } = service.appendActivity(roomId, { type: "chat", actor: { socketId }, detail: "<script>alert(1)</script>" });
+            assert.ok(!entry.detail.includes("<script>"), "HTML must be escaped");
+            assert.ok(entry.detail.includes("&lt;script&gt;") || entry.detail.includes("&amp;"), "escaped entities present");
+        });
+
+        test("setPlayback rejects oversized track object", () => {
+            const { roomId } = service.createRoom("Host", socketId);
+            const hugeTrack = { url: "https://x/" + "a".repeat(MAX_TRACK_OBJECT_BYTES + 100), title: "X" };
+            assert.throws(
+                () => service.setPlayback(roomId, socketId, { status: "playing", track: hugeTrack }),
+                InvalidPayloadError
+            );
+        });
+
+        test("setPlayback accepts normal-sized track", () => {
+            const { roomId } = service.createRoom("Host", socketId);
+            const track = { url: "https://ok.mp3", title: "Song", durationMs: 200000 };
+            const { change } = service.setPlayback(roomId, socketId, { status: "playing", track });
+            assert.equal(change.status, "playing");
+            assert.equal(change.track.url, "https://ok.mp3");
         });
     });
 });

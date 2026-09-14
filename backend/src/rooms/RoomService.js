@@ -13,8 +13,10 @@ const MIN_TIMER_MINUTES = 1;
 const MAX_TIMER_MINUTES = 180;
 const PLAYBACK_STATUSES = ["playing", "paused"];
 const MAX_QUEUE_SIZE = 20;
+const MAX_TRACK_OBJECT_BYTES = 4096;
 const MIN_PASSWORD_LENGTH = 4;
 const MAX_PASSWORD_LENGTH = 32;
+const ROOM_ID_PATTERN = /^[A-Z2-9]{6}$/;
 
 function coerceBoolean(value, field) {
     if (value === true || value === false) return value;
@@ -23,6 +25,19 @@ function coerceBoolean(value, field) {
     if (value === 1) return true;
     if (value === 0) return false;
     throw new InvalidPayloadError(`${field} must be true, false, 'true', 'false', 1, or 0`);
+}
+
+function escapeHtml(str) {
+    if (typeof str !== "string") return "";
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function trackObjectSize(track) {
+    try {
+        return Buffer.byteLength(JSON.stringify(track), "utf8");
+    } catch {
+        return Infinity;
+    }
 }
 
 class RoomNotFoundError extends Error {
@@ -113,7 +128,14 @@ class RoomService {
         this._cancel = (timers && timers.cancel) || ((id) => clearTimeout(id));
     }
 
+    _assertRoomId(roomId) {
+        if (typeof roomId !== "string" || !ROOM_ID_PATTERN.test(roomId)) {
+            throw new InvalidPayloadError("roomId must be a 6-char code (A-Z, 2-9)");
+        }
+    }
+
     _assertRoom(roomId) {
+        this._assertRoomId(roomId);
         const room = this.store.get(roomId);
         if (!room) throw new RoomNotFoundError();
         return room;
@@ -151,7 +173,10 @@ class RoomService {
             throw new PasswordRequiredError();
         }
         const candidate = this._hashPassword(password, room.passwordSalt);
-        if (candidate !== room.passwordHash) {
+        // Constant-time comparison to prevent timing attacks
+        const hashBuf = Buffer.from(room.passwordHash, "hex");
+        const candBuf = Buffer.from(candidate, "hex");
+        if (hashBuf.length !== candBuf.length || !crypto.timingSafeEqual(hashBuf, candBuf)) {
             throw new WrongPasswordError();
         }
         return true;
@@ -188,11 +213,21 @@ class RoomService {
         const room = this._assertRoom(roomId);
         this._assertMember(room, socketId);
         room.removeMember(socketId);
+        // Reclaim empty rooms: if the last member leaves, drop the room.
+        // This prevents unbounded in-memory room growth.
+        if (room.members.size === 0 && typeof this.store.remove === "function") {
+            this.store.remove(roomId);
+        }
         return room;
     }
 
     getRoom(roomId) {
         return this._assertRoom(roomId);
+    }
+
+    checkRoom(roomId) {
+        const room = this._assertRoom(roomId);
+        return { roomId: room.id, protected: room.passwordHash !== null };
     }
 
     getState(roomId) {
@@ -210,6 +245,9 @@ class RoomService {
         if (track !== undefined && track !== null) {
             if (typeof track !== "object" || typeof track.url !== "string") {
                 throw new InvalidPayloadError("track must be null or an object with a url string");
+            }
+            if (trackObjectSize(track) > MAX_TRACK_OBJECT_BYTES) {
+                throw new InvalidPayloadError(`track object must not exceed ${MAX_TRACK_OBJECT_BYTES} bytes`);
             }
             // Allow optional metadata fields (title, artist, artwork, duration, provider)
         }
@@ -234,6 +272,9 @@ class RoomService {
         this._assertMember(room, socketId);
         if (!track || typeof track !== "object" || typeof track.url !== "string") {
             throw new InvalidPayloadError("track must be an object with a url string");
+        }
+        if (trackObjectSize(track) > MAX_TRACK_OBJECT_BYTES) {
+            throw new InvalidPayloadError(`track object must not exceed ${MAX_TRACK_OBJECT_BYTES} bytes`);
         }
         if (room.state.queue.length >= MAX_QUEUE_SIZE) {
             throw new QueueFullError();
@@ -312,7 +353,7 @@ class RoomService {
             id: require("crypto").randomUUID(),
             type,
             actor,
-            detail,
+            detail: escapeHtml(detail),
             at: Date.now()
         };
         room.state.activity.push(entry);
@@ -467,3 +508,6 @@ module.exports.NotHostError = NotHostError;
 module.exports.QueueFullError = QueueFullError;
 module.exports.MAX_ROOM_MEMBERS = MAX_ROOM_MEMBERS;
 module.exports.MAX_ACTIVITY_HISTORY = MAX_ACTIVITY_HISTORY;
+module.exports.MAX_TRACK_OBJECT_BYTES = MAX_TRACK_OBJECT_BYTES;
+module.exports.ROOM_ID_PATTERN = ROOM_ID_PATTERN;
+module.exports.escapeHtml = escapeHtml;

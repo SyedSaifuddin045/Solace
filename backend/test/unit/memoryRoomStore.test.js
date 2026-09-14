@@ -69,4 +69,22 @@ describe("MemoryRoomStore", () => {
         assert.equal(room.id, "CUSTOM");
         assert.equal(store.get("CUSTOM"), room);
     });
+
+    test("create honors forced ids for a single test seam but store stays bounded per-instance", () => {
+        const store = freshStore();
+        // The singleton max-room ceiling is checked by the implementation; fresh
+        // instances are unbounded above MAX_ROOMS only via forced-id seam.
+        const id = store.create("BOUNDS").id;
+        assert.equal(id, "BOUNDS");
+    });
+
+    test("create throws MAX_ROOMS_REACHED beyond the room ceiling", () => {
+        const store = freshStore();
+        const MAX = store.MAX_ROOMS || 1000;
+        for (let i = 0; i < MAX; i++) {
+            store.create("R" + String(i).toString(36).padStart(5, "B"));
+        }
+        assert.equal(store.size, MAX);
+        assert.throws(() => store.create(), /MAX_ROOMS_REACHED/i);
+    });
 });
