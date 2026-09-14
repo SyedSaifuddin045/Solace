@@ -100,7 +100,7 @@ export function TimerCenter() {
             setMinimized(false);
           }}
           onMouseEnter={() => setMinimized(false)}
-          className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 opacity-80 hover:opacity-100"
+          className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 opacity-80 hover:opacity-100 pointer-events-auto"
           style={{ color: "var(--accent-amber)" }}
           aria-label="show timer"
         >
@@ -111,7 +111,7 @@ export function TimerCenter() {
 
       {/* expanded card */}
       {!minimized && (
-        <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome max-w-[90vw] sm:bottom-auto bottom-20">
+        <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome max-w-[90vw] sm:bottom-auto bottom-20 pointer-events-auto">
           {timer.status !== "idle" && (
             <>
               <p className="text-[10px] opacity-50 mb-0.5">pomodoro · {timer.status}</p>

@@ -203,9 +203,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
         className="absolute top-0 left-0 pointer-events-none transition-[right] duration-300 ease-out"
         style={{ right: activePanel !== "none" ? "25rem" : "0" }}
       >
-        <div className="flex justify-center w-screen pointer-events-auto">
-          <TimerCenter />
-        </div>
+        <TimerCenter />
       </div>
 
       {/* panels — rendered at top level outside ChromeReveal z-stack */}
