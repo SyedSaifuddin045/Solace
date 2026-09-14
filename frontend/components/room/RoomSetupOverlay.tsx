@@ -114,7 +114,7 @@ export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
                 label={w.originalName}
               >
                 {w.kind === "image" ? (
-                  <img src={resolveAssetUrl(w.url) ?? undefined} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  <img src={resolveAssetUrl(w.url) ?? undefined} alt="" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover" />
                 ) : (
                   <video src={resolveAssetUrl(w.url) ?? undefined} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
                 )}

@@ -1,5 +1,6 @@
 import { BACKEND_URL } from "@/lib/socket";
 import { httpUploadError } from "@/lib/errors";
+import { useRoomStore } from "@/lib/store";
 
 export type WallpaperKind = "image" | "video";
 
@@ -16,6 +17,9 @@ export async function uploadWallpaper(
 ): Promise<{ id: string; url: string; kind: WallpaperKind; size: number }> {
   const body = new FormData();
   body.append("roomId", roomId);
+  // Attach own socket ID so the backend can verify room membership
+  const socketId = useRoomStore.getState().socketId;
+  body.append("socketId", socketId ?? "");
   body.append("file", file);
 
   const res = await fetch(`${BACKEND_URL}/uploads`, { method: "POST", body });

@@ -166,7 +166,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
           wallpaper.kind === "video" ? (
             <video src={resolveAssetUrl(wallpaper.url) ?? undefined} muted loop playsInline autoPlay className="w-full h-full object-cover" />
           ) : (
-            <img src={resolveAssetUrl(wallpaper.url) ?? undefined} alt="" className="w-full h-full object-cover" />
+            <img src={resolveAssetUrl(wallpaper.url) ?? undefined} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
           )
         ) : (
           <div className="wallpaper w-full h-full" />

@@ -70,7 +70,7 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
         <div className="min-w-[220px]">
           <div className="flex items-center gap-2.5 mb-2">
             {track?.artwork ? (
-              <img src={track.artwork} alt="" className="w-10 h-10 rounded-md object-cover shrink-0" />
+              <img src={track.artwork} alt="" referrerPolicy="no-referrer" className="w-10 h-10 rounded-md object-cover shrink-0" />
             ) : (
               <div className="w-10 h-10 rounded-md grid place-items-center shrink-0" style={{ background: "var(--depth-3)" }}>
                 <Music size={14} className="opacity-40" />
@@ -119,7 +119,7 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
       ) : (
         <div className="flex items-center gap-3">
           {track?.artwork ? (
-            <img src={track.artwork} alt="" className="w-8 h-8 rounded-sm object-cover shrink-0" />
+            <img src={track.artwork} alt="" referrerPolicy="no-referrer" className="w-8 h-8 rounded-sm object-cover shrink-0" />
           ) : (
             <div className="flex items-end gap-[3px] h-4">
               {[0, 1, 2, 3].map((i) => (

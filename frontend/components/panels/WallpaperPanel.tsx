@@ -68,7 +68,7 @@ export function WallpaperPanel({ onClose }: { onClose: () => void }) {
               {w.kind === "video" ? (
                 <video src={resolveAssetUrl(w.url) ?? undefined} muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
               ) : (
-                <img src={resolveAssetUrl(w.url) ?? undefined} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                <img src={resolveAssetUrl(w.url) ?? undefined} alt="" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover" />
               )}
               <span className="absolute bottom-1 left-1 max-w-[calc(100%-8px)] text-[9px] opacity-80 px-1 text-left truncate z-10" style={{ background: "rgba(20,17,15,0.6)", borderRadius: 4 }}>{w.originalName}</span>
             </button>

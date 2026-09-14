@@ -17,10 +17,12 @@ export function AudioPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastStatusRef = useRef<string>("");
 
-  // Build proxied audio URL
+  // Build proxied audio URL — attach roomId + socketId for server membership gate
   const rawAudioUrl = track?.audioUrl || null;
-  const audioUrl = rawAudioUrl
-    ? `${BACKEND_URL}/track/proxy?url=${encodeURIComponent(rawAudioUrl)}`
+  const roomId = useRoomStore((s) => s.roomId);
+  const socketId = useRoomStore((s) => s.socketId);
+  const audioUrl = rawAudioUrl && roomId && socketId
+    ? `${BACKEND_URL}/track/proxy?url=${encodeURIComponent(rawAudioUrl)}&roomId=${encodeURIComponent(roomId)}&socketId=${encodeURIComponent(socketId)}`
     : null;
 
   // Create audio element on mount

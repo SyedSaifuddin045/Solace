@@ -94,7 +94,7 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
             style={{ background: "var(--depth-2)", border: "1px solid rgba(237,224,210,0.1)" }}
           >
             {preview.artwork ? (
-              <img src={preview.artwork} alt="" className="w-12 h-12 rounded-md object-cover" />
+              <img src={preview.artwork} alt="" referrerPolicy="no-referrer" className="w-12 h-12 rounded-md object-cover" />
             ) : (
               <div className="w-12 h-12 rounded-md grid place-items-center" style={{ background: "var(--depth-3)" }}>
                 <Music size={16} className="opacity-40" />
@@ -128,7 +128,7 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
             style={{ background: "var(--depth-2)", border: "1px solid rgba(237,224,210,0.1)" }}
           >
             {track.artwork ? (
-              <img src={track.artwork} alt="" className="w-10 h-10 rounded-md object-cover" />
+              <img src={track.artwork} alt="" referrerPolicy="no-referrer" className="w-10 h-10 rounded-md object-cover" />
             ) : (
               <div className="w-10 h-10 rounded-md grid place-items-center" style={{ background: "var(--depth-3)" }}>
                 <Music size={14} className="opacity-40" />

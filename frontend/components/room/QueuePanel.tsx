@@ -56,7 +56,7 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
               style={{ background: "var(--depth-2)", border: "1px solid rgba(237,224,210,0.08)" }}
             >
               {track.artwork ? (
-                <img src={track.artwork} alt="" className="w-8 h-8 rounded-md object-cover shrink-0" />
+                <img src={track.artwork} alt="" referrerPolicy="no-referrer" className="w-8 h-8 rounded-md object-cover shrink-0" />
               ) : (
                 <div className="w-8 h-8 rounded-md grid place-items-center shrink-0" style={{ background: "var(--depth-3)" }}>
                   <Music size={12} className="opacity-40" />
