@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useRoomStore } from "@/lib/store";
 
 function extractYouTubeId(url: string): string | null {
@@ -16,12 +16,11 @@ function extractYouTubeId(url: string): string | null {
 /**
  * Hidden iframe that plays YouTube audio only, synced across room members.
  *
- * Sync model:
- * - Server broadcasts `{ position, updatedAt }` for every play/pause/seek/set_track
- * - All members compute: `currentPos = position + (Date.now() - updatedAt) / 1000`
- * - iframe `start` param = computed position at load time
- * - Keyed on `videoId+seekKey` so iframe reloads on seek
- * - Periodic drift check reloads if >3s off
+ * Sync: server broadcasts { position, updatedAt } → members compute
+ * currentPos = position + (Date.now() - updatedAt) / 1000 → iframe start param.
+ *
+ * Autoplay: browser blocks audio without user gesture. We arm a click listener
+ * after mount; first click triggers playVideo via postMessage.
  */
 export function AudioPlayer() {
   const track = useRoomStore((s) => s.state.playback.track);
@@ -31,18 +30,19 @@ export function AudioPlayer() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
   const lastCmdRef = useRef("");
+  const [userInteracted, setUserInteracted] = useState(false);
 
   const videoId = track?.url ? extractYouTubeId(track.url) : null;
 
-  // Compute the correct start time for this member
+  // Compute correct start time
   const startTime = useMemo(() => {
     if (!videoId) return 0;
     const elapsed = status === "playing" ? (Date.now() - updatedAt) / 1000 : 0;
     return Math.max(0, Math.floor(position + elapsed));
   }, [videoId, position, updatedAt, status]);
 
-  // Key changes on track change OR seek (position jump > 2s) → iframe reloads
-  const seekKey = useMemo(() => `${videoId}:${track?.url}:${Math.floor(position / 2)}`, [videoId, track?.url, position]);
+  // Key on track + position for reload on seek
+  const seekKey = `${videoId}:${track?.url}:${Math.floor(position / 2)}`;
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const embedUrl = videoId
@@ -54,7 +54,25 @@ export function AudioPlayer() {
     iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: "command", func: cmd, args: [] }), "*");
   }, []);
 
-  // Listen for onReady → auto-play if room is playing
+  // Arm click listener — first user click unlocks audio
+  useEffect(() => {
+    if (userInteracted || !videoId) return;
+    const unlock = () => {
+      setUserInteracted(true);
+      // Try to play on first interaction
+      if (readyRef.current && status === "playing") {
+        setTimeout(() => sendCmd("playVideo"), 100);
+      }
+    };
+    window.addEventListener("click", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [videoId, status, sendCmd, userInteracted]);
+
+  // Listen for onReady
   useEffect(() => {
     if (!videoId) return;
     const handler = (e: MessageEvent) => {
@@ -62,8 +80,9 @@ export function AudioPlayer() {
         const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
         if (data.event === "onReady") {
           readyRef.current = true;
-          // Start playing if room is in playing state
-          if (status === "playing") {
+          console.debug("[solace:FE] YouTube iframe ready");
+          // Play if user has interacted and room is playing
+          if (userInteracted && status === "playing") {
             setTimeout(() => sendCmd("playVideo"), 100);
           }
         }
@@ -71,29 +90,29 @@ export function AudioPlayer() {
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [videoId, status, sendCmd]);
+  }, [videoId, status, sendCmd, userInteracted]);
 
   // Sync play/pause
   useEffect(() => {
-    if (!videoId || !readyRef.current) return;
+    if (!videoId || !readyRef.current || !userInteracted) return;
     const cmd = status === "playing" ? "playVideo" : "pauseVideo";
     if (cmd !== lastCmdRef.current) {
       lastCmdRef.current = cmd;
       sendCmd(cmd);
+      console.debug("[solace:FE] YouTube sendCmd", cmd);
     }
-  }, [status, videoId, sendCmd]);
+  }, [status, videoId, sendCmd, userInteracted]);
 
-  // Drift check: every 10s, verify position is within 3s of expected
+  // Retry play if first attempt fails (YouTube sometimes needs a second try)
   useEffect(() => {
-    if (!videoId || status !== "playing") return;
-    const interval = setInterval(() => {
-      if (!readyRef.current) return;
-      // The iframe start param handles initial sync; drift is inherent to iframe API
-      // No reliable way to query current position from YouTube iframe
-      // Trust the start param + time math for now
-    }, 10_000);
-    return () => clearInterval(interval);
-  }, [videoId, status]);
+    if (!videoId || !userInteracted || status !== "playing") return;
+    const retry = setTimeout(() => {
+      if (readyRef.current && lastCmdRef.current !== "playVideo") {
+        sendCmd("playVideo");
+      }
+    }, 1000);
+    return () => clearTimeout(retry);
+  }, [videoId, userInteracted, status, sendCmd]);
 
   if (!videoId || !embedUrl) return null;
 
