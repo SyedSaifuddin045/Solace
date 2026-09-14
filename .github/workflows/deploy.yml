@@ -1,0 +1,32 @@
+name: Deploy to Coolify
+
+on:
+  push:
+    branches: [coolify-deploy]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy backend to Coolify
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
+        run: |
+          curl -fsS -X POST "$COOLIFY_BASE_URL/api/v1/deploy" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            -d '{"uuid":"kk17nds0emb90iz9mce73c02","force":true}'
+
+      - name: Deploy frontend to Coolify
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
+        run: |
+          curl -fsS -X POST "$COOLIFY_BASE_URL/api/v1/deploy" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            -d '{"uuid":"t390lbhzt7guobl1j15xg8ba","force":true}'
