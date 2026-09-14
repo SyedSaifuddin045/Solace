@@ -24,15 +24,15 @@ const steps = [];
 const allSockets = [];
 let manager = null;
 
-function portOf() {
-    if (!url) return manager.port;
-    return Number(new URL(url).port || 80);
+function endpointOf() {
+    if (!url) return `http://localhost:${manager.port}`;
+    return url;
 }
 
 // rtc:config is emitted AFTER a successful room create/join (not on bare
 // connect), so listeners are bound just before those emits.
 async function connect(name) {
-    const socket = ioc(`http://localhost:${portOf()}`, { transports: ["websocket"] });
+    const socket = ioc(endpointOf(), { transports: ["websocket"] });
     allSockets.push(socket);
     await new Promise((resolve, reject) => {
         socket.once("connect", resolve);
@@ -104,7 +104,7 @@ async function scenario() {
         pass("wallpaper syncs host -> guest", `changedBy=${String(wall.changedBy).slice(0, 8)}…`);
 
         // 4b. upload a real wallpaper file over HTTP
-        const baseUrl = url || `http://localhost:${portOf()}`;
+        const baseUrl = endpointOf();
         const pngBytes = Buffer.concat([
             Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
             Buffer.alloc(64)
