@@ -9,6 +9,7 @@ beforeEach(() => useRoomStore.setState({ roomId: null, members: [], error: null,
   activity: [],
   title: "",
   timer: { status: "idle", durationMs: 0, remainingMs: 0, endsAt: null, startedBy: null, startedAt: null, updatedAt: 0 },
+  protected: false,
 }}));
 
 describe("applyEvent — room:joined", () => {

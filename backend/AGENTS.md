@@ -57,6 +57,7 @@ Room state (`room.state`), exact field names:
 - `wallpapers`: array of upload metas `{ id, url, kind, contentType, size, originalName, uploadedBy, uploadedAt }`
 - `activity`: array of entries (capped at 50)
 - `title`: string
+- `protected`: boolean — true when the room has a password (password itself never leaves the room object; scrypt hash + salt stored in memory)
 - `timer`: `{ status: "idle"|"running"|"paused", durationMs, remainingMs, endsAt, startedBy, startedAt, updatedAt }`
 
 Activity entry: `{ id: uuid, type, actor: { socketId, displayName }, detail, at }` where `type ∈ chat|playback|wallpaper|title|media|timer|system`. System entries auto-created on join ("joined"), leave ("left"), create ("created room"), timer-complete ("timer finished").
@@ -66,8 +67,8 @@ Constraints (`RoomService.js`): max 4 members, displayName ≤24, chat text ≤5
 **CLIENT → SERVER** (from `events.js` CLIENT):
 | Constant | Wire |
 |---|---|
-| ROOM_CREATE | `room:create` |
-| ROOM_JOIN | `room:join` |
+| ROOM_CREATE | `room:create` | payload `{ displayName, password? }` |
+| ROOM_JOIN | `room:join` | payload `{ roomId, displayName, password? }` |
 | ROOM_LEAVE | `room:leave` |
 | ROOM_GET_STATE | `room:get_state` |
 | ROOM_SET_TITLE | `room:set_title` |
@@ -99,7 +100,7 @@ Constraints (`RoomService.js`): max 4 members, displayName ≤24, chat text ≤5
 ## 5. Conventions (hard requirements)
 - **CommonJS**: `require`/`module.exports`. No ESM imports. No build step.
 - **Handler factory pattern**: `createXHandler(io, roomService)` returning `{ handleX(socket, payload) }`. Each factory defines a local `emitError(socket, err)` that emits `SERVER.ROOM_ERROR` with `{ code, message }`.
-- **Route ALL errors through emitError** (`{ code, message }`). Real codes (verify in source): `ROOM_NOT_FOUND`, `ROOM_FULL`, `ALREADY_IN_ROOM`, `NOT_IN_ROOM`, `TARGET_NOT_IN_ROOM`, `INVALID_PAYLOAD`, `NOT_HOST`, `UNSUPPORTED_MEDIA_TYPE` (HTTP 415), `PAYLOAD_TOO_LARGE` (HTTP 413, multer), plus HTTP `MISSING_FILE`, `NOT_FOUND`, `BAD_REQUEST`.
+- **Route ALL errors through emitError** (`{ code, message }`). Real codes (verify in source): `ROOM_NOT_FOUND`, `ROOM_FULL`, `ALREADY_IN_ROOM`, `NOT_IN_ROOM`, `TARGET_NOT_IN_ROOM`, `INVALID_PAYLOAD`, `NOT_HOST`, `ROOM_PASSWORD_REQUIRED`, `WRONG_PASSWORD`, `UNSUPPORTED_MEDIA_TYPE` (HTTP 415), `PAYLOAD_TOO_LARGE` (HTTP 413, multer), plus HTTP `MISSING_FILE`, `NOT_FOUND`, `BAD_REQUEST`.
 - **Member lookup guard**: `member ? member.displayName : "unknown"` before reading displayName from `room.members.get(socketId)` (a disconnect/upload `socketId` may not be a member).
 - **Wire names ONLY via `events.js` constants** (import `{ CLIENT, SERVER }`). Never string literal event names, including in tests/CLI.
 - **State mutations only inside RoomService**. `appendActivity` is the single choke point for the activity log (every action handler + join/leave/timer through it); `addUpload` is the choke point for the wallpaper library (eviction lives inside it). Handlers call service methods, never mutate `room.state` directly.

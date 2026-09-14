@@ -24,6 +24,7 @@ export interface RoomState {
   activity: ActivityEntry[];
   title: string;
   timer: TimerState;
+  protected: boolean;
 }
 export interface RoomError { code: string; message: string }
 
@@ -35,6 +36,7 @@ export const EMPTY_STATE: RoomState = {
   activity: [],
   title: "",
   timer: { status: "idle", durationMs: 0, remainingMs: 0, endsAt: null, startedBy: null, startedAt: null, updatedAt: 0 },
+  protected: false,
 };
 
 interface RoomStore {

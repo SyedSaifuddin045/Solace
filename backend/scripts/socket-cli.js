@@ -170,6 +170,7 @@ function handleCommand(line) {
 
     const [cmd, ...rest] = trimmed.split(/\s+/);
     const arg0 = rest[0];
+    const arg1 = rest[1];
 
     switch (cmd) {
         case "help":
@@ -177,8 +178,8 @@ function handleCommand(line) {
                 [
                     "Commands:",
                     "  help                 — show this list",
-                    "  create               — room:create",
-                    "  join <roomId>        — room:join",
+                    "  create [password]   — room:create (password optional)",
+                    "  join <roomId> [password] — room:join",
                     "  leave                — room:leave",
                     "  state                — room:get_state",
                     "  play [trackUrl]      — playback:play (resume if no url)",
@@ -201,15 +202,15 @@ function handleCommand(line) {
             break;
 
         case "create":
-            emit("room:create", { displayName });
+            emit("room:create", { displayName, password: arg0 || undefined });
             break;
 
         case "join":
             if (!arg0) {
-                console.log("Usage: join <roomId>");
+                console.log("Usage: join <roomId> [password]");
                 break;
             }
-            emit("room:join", { roomId: arg0, displayName });
+            emit("room:join", { roomId: arg0, displayName, password: arg1 || undefined });
             break;
 
         case "leave":

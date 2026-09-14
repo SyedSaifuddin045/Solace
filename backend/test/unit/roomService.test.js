@@ -11,6 +11,8 @@ const {
     TargetNotInRoomError,
     NotHostError,
     QueueFullError,
+    PasswordRequiredError,
+    WrongPasswordError,
     MAX_ROOM_MEMBERS,
     MAX_ACTIVITY_HISTORY
 } = require("../../src/rooms/RoomService");
@@ -703,6 +705,58 @@ describe("RoomService", () => {
         test("skipToNext rejects non-member", () => {
             service.addToQueue(roomId, socketId, { url: "https://a.com" });
             assert.throws(() => service.skipToNext(roomId, "outsider"), NotInRoomError);
+        });
+    });
+
+    describe("password protection", () => {
+        let service;
+        let store;
+        const socketId = "pass_test_1";
+        const displayName = "Tester";
+
+        beforeEach(() => {
+            store = freshStore();
+            service = new RoomService(store);
+            const { roomId: rid } = service.createRoom(displayName, socketId, "testpass123");
+            roomId = rid;
+        });
+
+        let roomId;
+
+        test("createRoom with password → protected", () => {
+            const room = service.getRoom(roomId);
+            assert.equal(room.passwordHash !== null, true);
+            assert.equal(room.toPublicState().state.protected, true);
+        });
+
+        test("createRoom without password → not protected", () => {
+            const { room } = service.createRoom("NoPass", "no_pass_sock");
+            assert.equal(room.passwordHash, null);
+            assert.equal(room.toPublicState().state.protected, false);
+        });
+
+        test("createRoom rejects invalid password length", () => {
+            assert.throws(() => service.createRoom("Bad", "x", "ab"), InvalidPayloadError);
+            assert.throws(() => service.createRoom("Bad", "x", "a".repeat(33)), InvalidPayloadError);
+        });
+
+        test("joinRoom with correct password → success", () => {
+            const room = service.joinRoom(roomId, "pass_ok", "Joiner", "testpass123");
+            assert.equal(room.members.has("pass_ok"), true);
+        });
+
+        test("joinRoom with no password → PasswordRequiredError", () => {
+            assert.throws(() => service.joinRoom(roomId, "pass_wrong", "Joiner"), PasswordRequiredError);
+        });
+
+        test("joinRoom with wrong password → WrongPasswordError", () => {
+            assert.throws(() => service.joinRoom(roomId, "pass_wrong", "Joiner", "wrongpass"), WrongPasswordError);
+        });
+
+        test("joinRoom on unprotected room without password → success", () => {
+            const { roomId: pubId } = service.createRoom("Public", "pub_sock");
+            const room = service.joinRoom(pubId, "pub_join", "Joiner");
+            assert.equal(room.members.has("pub_join"), true);
         });
     });
 });

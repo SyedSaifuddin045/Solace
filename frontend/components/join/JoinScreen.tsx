@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight, Plus, Lock } from "lucide-react";
 import { AvatarPicker } from "@/components/join/AvatarPicker";
 import { loadPrefs, savePrefs, touchRecentRoom } from "@/lib/prefs";
 import { getSocket } from "@/lib/socket";
 import { useRoomStore } from "@/lib/store";
+import { readRoomPassword, writeRoomPassword } from "@/lib/password";
 import type { Member, RoomState } from "@/lib/store";
 import { userMessage } from "@/lib/errors";
 
@@ -18,6 +19,8 @@ export function JoinScreen() {
   const [name, setName] = useState(() => loadPrefs().name);
   const [avatar, setAvatar] = useState<string | null>(() => loadPrefs().avatar);
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordHint, setPasswordHint] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"join" | "create" | null>(null);
   const [recentRooms, setRecentRooms] = useState<string[]>([]);
@@ -67,6 +70,7 @@ export function JoinScreen() {
       socket.off("room:error", onError as never);
       setBusy(null);
       console.debug("[solace:FE] room:joined received", { roomId: p?.roomId, memberCount: p?.members?.length, hasState: !!p?.state });
+      if (p && p.roomId) writeRoomPassword(p.roomId, password);
       hydrate(p);
       if (p) routeToRoom(p.roomId);
     };
@@ -75,13 +79,14 @@ export function JoinScreen() {
       socket.off("room:error", onError as never);
       setBusy(null);
       console.debug("[solace:FE] join room:error received", { code: p?.code, message: p?.message });
+      if (p?.code === "ROOM_PASSWORD_REQUIRED") setPasswordHint(true);
       setError(userMessage(p?.code ?? "", p?.message ?? ""));
       useRoomStore.getState().clearError();
     };
     socket.on("room:joined", onJoined as never);
     socket.on("room:error", onError as never);
-    console.debug("[solace:FE] room:join emit", { roomId: code, displayName: name, hasAvatar: !!avatar });
-    socket.emit("room:join", { roomId: code, displayName: name, avatar });
+    console.debug("[solace:FE] room:join emit", { roomId: code, displayName: name, hasAvatar: !!avatar, hasPassword: !!password });
+    socket.emit("room:join", { roomId: code, displayName: name, avatar, password: password || undefined });
   };
 
   const doCreate = () => {
@@ -96,6 +101,7 @@ export function JoinScreen() {
       socket.off("room:error", onError as never);
       setBusy(null);
       console.debug("[solace:FE] room:created received", { roomId: p?.roomId, memberCount: p?.members?.length, hasState: !!p?.state });
+      if (p && p.roomId) writeRoomPassword(p.roomId, password);
       hydrate(p);
       sessionStorage.setItem("solace:setup", "1");
       console.debug("[solace:FE] setup flag set", { roomId: p?.roomId });
@@ -111,8 +117,8 @@ export function JoinScreen() {
     };
     socket.on("room:created", onCreated as never);
     socket.on("room:error", onError as never);
-    console.debug("[solace:FE] room:create emit", { displayName: name, hasAvatar: !!avatar });
-    socket.emit("room:create", { displayName: name, avatar });
+    console.debug("[solace:FE] room:create emit", { displayName: name, hasAvatar: !!avatar, hasPassword: !!password });
+    socket.emit("room:create", { displayName: name, avatar, password: password || undefined });
   };
 
   return (
@@ -144,6 +150,20 @@ export function JoinScreen() {
             onChange={(e) => setCode(normalizeCode(e.target.value))}
             placeholder="ABC123"
             className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none tracking-widest"
+            style={{ background: "rgba(20,17,15,0.4)" }}
+          />
+        </div>
+
+        <div className="mt-3 text-left">
+          <label className="text-[10px] opacity-50 uppercase tracking-widest flex items-center gap-1">
+            <Lock size={9} /> password {passwordHint && <span style={{ color: "var(--accent-amber)" }}>— required for this room</span>}
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="optional · 4–32 chars"
+            className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none"
             style={{ background: "rgba(20,17,15,0.4)" }}
           />
         </div>

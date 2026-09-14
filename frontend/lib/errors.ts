@@ -1,6 +1,8 @@
 export function userMessage(code: string, message: string): string {
   switch (code) {
     case "ROOM_NOT_FOUND": return "Room not found. Check the code and try again.";
+    case "ROOM_PASSWORD_REQUIRED": return "This room is password protected.";
+    case "WRONG_PASSWORD": return "Wrong password.";
     case "ROOM_FULL": return message || "Room is full.";
     case "NOT_IN_ROOM": return "You're not in this room.";
     case "NOT_HOST": return "Only the host can do that.";

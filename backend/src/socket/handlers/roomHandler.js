@@ -9,7 +9,8 @@ function createRoomHandler(io, roomService) {
         handleCreate(socket, payload) {
             try {
                 const displayName = payload && payload.displayName;
-                const { roomId, room } = roomService.createRoom(displayName, socket.id);
+                const password = payload && payload.password;
+                const { roomId, room } = roomService.createRoom(displayName, socket.id, password);
                 socket.join(roomId);
                 roomService.appendActivity(roomId, {
                     type: "system",
@@ -31,7 +32,8 @@ function createRoomHandler(io, roomService) {
             try {
                 const roomId = payload && payload.roomId;
                 const displayName = payload && payload.displayName;
-                const room = roomService.joinRoom(roomId, socket.id, displayName);
+                const password = payload && payload.password;
+                const room = roomService.joinRoom(roomId, socket.id, displayName, password);
                 socket.join(roomId);
                 const { entry: joinEntry } = roomService.appendActivity(roomId, {
                     type: "system",

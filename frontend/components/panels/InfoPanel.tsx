@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Copy, Check, Pencil, LogOut, X } from "lucide-react";
+import { Copy, Check, Pencil, LogOut, X, Lock } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { useRouter } from "next/navigation";
@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 export function InfoPanel({ onClose }: { onClose: () => void }) {
   const roomId = useRoomStore((s) => s.roomId);
   const title = useRoomStore((s) => s.state.title);
+  const isProtected = useRoomStore((s) => s.state.protected);
   const members = useRoomStore((s) => s.members);
   const isHost = members[0]?.isHost ?? false; // creator is first in snapshot (see TitleChip host note)
   const [copied, setCopied] = useState(false);
@@ -55,6 +56,7 @@ export function InfoPanel({ onClose }: { onClose: () => void }) {
         <Row label="code">
           <span className="flex items-center gap-2">
             <span className="tracking-widest">{roomId}</span>
+            {isProtected && <Lock size={10} style={{ color: "var(--accent-amber)" }} aria-label="password protected" />}
             <button aria-label="copy code" onClick={copy}>{copied ? <Check size={11} style={{ color: "var(--status-success)" }} /> : <Copy size={11} className="opacity-50" />}</button>
           </span>
         </Row>

@@ -16,9 +16,11 @@ import { TimerCenter } from "@/components/room/TimerCenter";
 import { ToastStack } from "@/components/room/ToastStack";
 import { ReconnectOverlay } from "@/components/room/ReconnectOverlay";
 import { ErrorPage } from "@/components/room/ErrorPage";
+import { PasswordGate } from "@/components/room/PasswordGate";
 import { RoomSetupOverlay } from "@/components/room/RoomSetupOverlay";
 import { getSocket } from "@/lib/socket";
 import { useRoomStore } from "@/lib/store";
+import { readRoomPassword } from "@/lib/password";
 import { loadPrefs } from "@/lib/prefs";
 import { initRtc, startSpeakingDetection, stopRtc } from "@/lib/rtc";
 import { resolveAssetUrl } from "@/lib/upload";
@@ -115,8 +117,9 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
     // join (also covers reloads: rejoin replays snapshot via room:joined)
     if (useRoomStore.getState().roomId !== roomId) {
       const prefs = loadPrefs();
-      console.debug("[solace:FE] RoomScreen join emit", { roomId, displayName: prefs.name, hasAvatar: !!prefs.avatar });
-      socket.emit("room:join", { roomId, displayName: prefs.name, avatar: prefs.avatar });
+      const password = readRoomPassword(roomId) ?? undefined;
+      console.debug("[solace:FE] RoomScreen join emit", { roomId, displayName: prefs.name, hasAvatar: !!prefs.avatar, hasPassword: !!password });
+      socket.emit("room:join", { roomId, displayName: prefs.name, avatar: prefs.avatar, password });
     } else {
       console.debug("[solace:FE] RoomScreen skip join (store already hydrated)", { roomId });
     }
@@ -138,6 +141,10 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
   if (error?.code === "ROOM_NOT_FOUND" || error?.code === "ROOM_FULL") {
     return <ErrorPage code={error.code} />;
+  }
+
+  if (error?.code === "ROOM_PASSWORD_REQUIRED" || error?.code === "WRONG_PASSWORD") {
+    return <PasswordGate roomId={roomId} />;
   }
 
   const wallpaper = state.wallpaper;

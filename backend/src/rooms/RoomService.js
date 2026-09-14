@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const Room = require("./Room");
 
 const MAX_ROOM_MEMBERS = 4;
@@ -12,6 +13,8 @@ const MIN_TIMER_MINUTES = 1;
 const MAX_TIMER_MINUTES = 180;
 const PLAYBACK_STATUSES = ["playing", "paused"];
 const MAX_QUEUE_SIZE = 20;
+const MIN_PASSWORD_LENGTH = 4;
+const MAX_PASSWORD_LENGTH = 32;
 
 function coerceBoolean(value, field) {
     if (value === true || value === false) return value;
@@ -70,6 +73,22 @@ class InvalidPayloadError extends Error {
     }
 }
 
+class PasswordRequiredError extends Error {
+    constructor(message = "This room is password protected") {
+        super(message);
+        this.name = "PasswordRequiredError";
+        this.code = "ROOM_PASSWORD_REQUIRED";
+    }
+}
+
+class WrongPasswordError extends Error {
+    constructor(message = "Wrong password") {
+        super(message);
+        this.name = "WrongPasswordError";
+        this.code = "WRONG_PASSWORD";
+    }
+}
+
 class NotHostError extends Error {
     constructor(message = "Only the room host can set the title") {
         super(message);
@@ -110,9 +129,39 @@ class RoomService {
         }
     }
 
-    createRoom(displayName, socketId) {
+    _assertPassword(password) {
+        if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
+            throw new InvalidPayloadError(`password must be a string of ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} chars`);
+        }
+    }
+
+    _hashPassword(password, salt) {
+        return crypto.scryptSync(password, salt, 64).toString("hex");
+    }
+
+    _setRoomPassword(room, password) {
+        const salt = crypto.randomBytes(16).toString("hex");
+        room.passwordSalt = salt;
+        room.passwordHash = this._hashPassword(password, salt);
+    }
+
+    _verifyRoomPassword(room, password) {
+        if (room.passwordHash === null) return true;
+        if (typeof password !== "string" || password.length === 0) {
+            throw new PasswordRequiredError();
+        }
+        const candidate = this._hashPassword(password, room.passwordSalt);
+        if (candidate !== room.passwordHash) {
+            throw new WrongPasswordError();
+        }
+        return true;
+    }
+
+    createRoom(displayName, socketId, password) {
         this._assertDisplayName(displayName);
+        if (password !== undefined && password !== null && password !== "") this._assertPassword(password);
         const room = this.store.create();
+        if (password !== undefined && password !== null && password !== "") this._setRoomPassword(room, password);
         room.addMember(socketId, {
             displayName,
             joinedAt: Date.now(),
@@ -121,9 +170,10 @@ class RoomService {
         return { roomId: room.id, room };
     }
 
-    joinRoom(roomId, socketId, displayName) {
+    joinRoom(roomId, socketId, displayName, password) {
         const room = this._assertRoom(roomId);
         this._assertDisplayName(displayName);
+        this._verifyRoomPassword(room, password);
         if (room.members.size >= MAX_ROOM_MEMBERS) throw new RoomFullError();
         if (room.members.has(socketId)) throw new AlreadyInRoomError();
         room.addMember(socketId, {
@@ -411,6 +461,8 @@ module.exports.AlreadyInRoomError = AlreadyInRoomError;
 module.exports.NotInRoomError = NotInRoomError;
 module.exports.TargetNotInRoomError = TargetNotInRoomError;
 module.exports.InvalidPayloadError = InvalidPayloadError;
+module.exports.PasswordRequiredError = PasswordRequiredError;
+module.exports.WrongPasswordError = WrongPasswordError;
 module.exports.NotHostError = NotHostError;
 module.exports.QueueFullError = QueueFullError;
 module.exports.MAX_ROOM_MEMBERS = MAX_ROOM_MEMBERS;

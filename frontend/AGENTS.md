@@ -32,8 +32,8 @@ CORS: server reads `CLIENT_ORIGIN` env (default `http://localhost:3000`). Port f
 
 | Event | Payload |
 |---|---|
-| `room:create` | `{ displayName }` |
-| `room:join` | `{ roomId, displayName }` |
+| `room:create` | `{ displayName, password? }` — password optional, 4–32 chars. Omit for public room |
+| `room:join` | `{ roomId, displayName, password? }` — password required when room is protected |
 | `room:leave` | _(none)_ |
 | `room:get_state` | _(none)_ |
 | `room:set_title` | `{ title }` |
@@ -84,6 +84,7 @@ CORS: server reads `CLIENT_ORIGIN` env (default `http://localhost:3000`). Port f
   wallpapers: UploadMeta[],   // max 3 entries
   activity: ActivityEntry[],  // max 50 entries
   title: string,
+  protected: boolean,         // true when room has a password
   timer: { status: "idle"|"running"|"paused", durationMs: number, remainingMs: number,
            endsAt: number|null, startedBy: string|null, startedAt: number|null, updatedAt: number }
 }
@@ -168,6 +169,8 @@ Entry shape: `{ id: string, type: string, actor: { socketId, displayName }, deta
 | Code | Meaning |
 |---|---|
 | `ROOM_NOT_FOUND` | roomId doesn't exist |
+| `ROOM_PASSWORD_REQUIRED` | room is protected, password missing/empty |
+| `WRONG_PASSWORD` | password doesn't match |
 | `ROOM_FULL` | 4 members max |
 | `NOT_IN_ROOM` | caller not a member |
 | `NOT_HOST` | only host can set title |
@@ -185,6 +188,7 @@ Entry shape: `{ id: string, type: string, actor: { socketId, displayName }, deta
 | Room ID | 6 chars (A-Z, 2-9, no 0/O/1/I) |
 | Display name | 24 chars max |
 | Room title | 60 chars max |
+| Room password | 4–32 chars (optional; scrypt-hashed in memory) |
 | Activity history | 50 entries |
 | Chat text | 500 chars |
 | Timer range | 1–180 minutes |

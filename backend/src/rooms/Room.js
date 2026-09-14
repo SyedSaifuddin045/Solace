@@ -2,6 +2,8 @@ class Room {
     constructor(id) {
         this.id = id;
         this.members = new Map();
+        this.passwordSalt = null;
+        this.passwordHash = null;
         this.state = {
             playback: {
                 status: "paused",
@@ -9,6 +11,7 @@ class Room {
                 position: 0,
                 updatedAt: Date.now()
             },
+            queue: [],
             wallpaper: {
                 url: null,
                 kind: "image",
@@ -52,7 +55,10 @@ class Room {
                 audioOn: member.audioOn,
                 videoOn: member.videoOn
             })),
-            state: this.state
+            state: {
+            ...this.state,
+            protected: this.passwordHash !== null
+        }
         };
     }
 }

@@ -63,7 +63,7 @@ describe("Room entity", () => {
         assert.equal(m.displayName, "Alice");
         assert.equal(m.isHost, true);
         assert.ok(!("joinedAt" in m), "joinedAt must not leak to public state");
-        assert.deepEqual(pub.state, room.state);
+        assert.deepEqual(pub.state, { ...room.state, protected: false });
         assert.equal(pub.state.title, "");
     });
 
