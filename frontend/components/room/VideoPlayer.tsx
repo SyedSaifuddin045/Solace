@@ -1,75 +1,116 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useRoomStore } from "@/lib/store";
 
-function extractYouTubeId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?.*v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const p of patterns) {
-    const m = url.match(p);
-    if (m?.[1]) return m[1];
-  }
-  return null;
-}
-
 /**
- * Audio-only YouTube player synced across room members.
+ * Audio player using HTML5 <audio> element with raw audio URL from yt-dlp.
  *
- * Play/pause by mounting/unmounting the iframe.
- * - Play: mount iframe with autoplay=1&start=N
- * - Pause: unmount iframe (stops audio)
- * - Seek: unmount + remount with new start time
- *
- * User gesture required before first mount (browser autoplay policy).
+ * Sync model:
+ * - Server broadcasts { position, updatedAt } for play/pause/seek/set_track
+ * - On play: audio.currentTime = position + elapsed, audio.play()
+ * - On pause: audio.pause(), store current position
+ * - On seek: audio.currentTime = newPosition
+ * - Progress: SongWidget reads audio.currentTime via a shared ref
  */
 export function AudioPlayer() {
   const track = useRoomStore((s) => s.state.playback.track);
   const status = useRoomStore((s) => s.state.playback.status);
   const position = useRoomStore((s) => s.state.playback.position);
   const updatedAt = useRoomStore((s) => s.state.playback.updatedAt);
-  const [armed, setArmed] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastStatusRef = useRef<string>("");
+  const seekingRef = useRef(false);
 
-  const videoId = track?.url ? extractYouTubeId(track.url) : null;
-  const isYouTube = !!videoId;
-  const isPlaying = status === "playing";
+  const audioUrl = track?.audioUrl || null;
 
-  // Arm on first user interaction
+  // Create audio element on mount
   useEffect(() => {
-    if (armed || !isYouTube) return;
-    const arm = () => setArmed(true);
-    window.addEventListener("click", arm, { once: true });
-    window.addEventListener("keydown", arm, { once: true });
+    const audio = new Audio();
+    audio.crossOrigin = "anonymous";
+    audio.preload = "auto";
+    audioRef.current = audio;
+
+    // Expose globally for SongWidget progress tracking
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__solaceAudio = audio;
+
     return () => {
-      window.removeEventListener("click", arm);
-      window.removeEventListener("keydown", arm);
+      audio.pause();
+      audio.src = "";
+      audioRef.current = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).__solaceAudio;
     };
-  }, [isYouTube, armed]);
+  }, []);
 
-  // Don't render until user clicks
-  if (!armed || !isYouTube || !videoId) return null;
+  // Load new audio URL
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (!audioUrl) {
+      audio.pause();
+      audio.src = "";
+      return;
+    }
+    // Only reload if URL changed
+    if (audio.src !== audioUrl) {
+      audio.src = audioUrl;
+      audio.load();
+    }
+  }, [audioUrl]);
 
-  // Don't mount iframe if paused
-  if (!isPlaying) return null;
+  // Sync play/pause with store
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !audioUrl) return;
 
-  // Compute start time for sync
-  const elapsed = (Date.now() - updatedAt) / 1000;
-  const startTime = Math.max(0, Math.floor(position + elapsed));
+    const cmd = status === "playing" ? "play" : "pause";
+    if (cmd === lastStatusRef.current) return;
+    lastStatusRef.current = cmd;
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  // Key on videoId + startTime → reloads iframe on seek or track change
-  const iframeKey = `${videoId}:${startTime}`;
-  const src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(origin)}&start=${startTime}&rel=0&modestbranding=1`;
+    if (cmd === "play") {
+      // Compute correct position
+      const elapsed = (Date.now() - updatedAt) / 1000;
+      const targetTime = Math.max(0, position + elapsed);
 
-  return (
-    <div className="fixed" style={{ width: 1, height: 1, top: -9999, left: -9999 }}>
-      <iframe
-        key={iframeKey}
-        src={src}
-        style={{ width: 0, height: 0, border: 0 }}
-        allow="autoplay; encrypted-media"
-        title="audio"
-      />
-    </div>
-  );
+      // Seek if needed (within 2s tolerance)
+      if (Math.abs(audio.currentTime - targetTime) > 2) {
+        audio.currentTime = targetTime;
+      }
+
+      audio.play().catch(() => {
+        console.debug("[solace:FE] audio play blocked — needs user gesture");
+      });
+    } else {
+      audio.pause();
+    }
+  }, [status, audioUrl, position, updatedAt]);
+
+  // Handle seek events (position changes while playing)
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !audioUrl || status !== "playing") return;
+
+    // Skip if this is the initial load (handled above)
+    if (lastStatusRef.current !== "play") return;
+
+    const elapsed = (Date.now() - updatedAt) / 1000;
+    const targetTime = Math.max(0, position + elapsed);
+
+    // Only seek if significantly different (> 3s)
+    if (Math.abs(audio.currentTime - targetTime) > 3) {
+      seekingRef.current = true;
+      audio.currentTime = targetTime;
+      seekingRef.current = false;
+    }
+  }, [position, updatedAt, status, audioUrl]);
+
+  // Nothing to render — audio element is in-memory only
+  return null;
+}
+
+/** Get the current audio element for progress tracking */
+export function getAudioElement(): HTMLAudioElement | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).__solaceAudio as HTMLAudioElement | null;
 }

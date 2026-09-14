@@ -1,5 +1,9 @@
 const https = require("node:https");
 const http = require("node:http");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
+
+const execFileAsync = promisify(execFile);
 
 const YOUTUBE_PATTERNS = [
     /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
@@ -90,29 +94,41 @@ async function resolveYouTube(url) {
     const cached = cacheGet(cacheKey);
     if (cached) return { ...cached, url: canonical };
 
+    // Get metadata from oEmbed
+    let title = null;
+    let artist = null;
     try {
-        const data = await fetchJSON(`https://www.youtube.com/oembed?url=${encodeURIComponent(canonical)}&format=json`);
-        const result = {
-            url: canonical,
-            title: data.title || null,
-            artist: data.author_name || null,
-            artwork: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-            duration: null,
-            provider: "youtube",
-        };
-        cacheSet(cacheKey, result);
-        return result;
-    } catch (err) {
-        console.log("[solace:BE] resolveYouTube oEmbed failed, returning minimal", { videoId, error: err.message });
-        return {
-            url: canonical,
-            title: null,
-            artist: null,
-            artwork: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-            duration: null,
-            provider: "youtube",
-        };
+        const oembed = await fetchJSON(`https://www.youtube.com/oembed?url=${encodeURIComponent(canonical)}&format=json`);
+        title = oembed.title || null;
+        artist = oembed.author_name || null;
+    } catch {
+        // ignore — metadata is optional
     }
+
+    // Get audio stream URL via yt-dlp
+    let audioUrl = null;
+    try {
+        const { stdout } = await execFileAsync("yt-dlp", [
+            "-f", "bestaudio[ext=m4a]/bestaudio",
+            "--get-url",
+            canonical,
+        ], { timeout: 30000 });
+        audioUrl = stdout.trim() || null;
+    } catch (err) {
+        console.log("[solace:BE] yt-dlp failed", { videoId, error: err.message });
+    }
+
+    const result = {
+        url: canonical,
+        title,
+        artist,
+        artwork: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+        duration: null,
+        provider: "youtube",
+        audioUrl,
+    };
+    cacheSet(cacheKey, result);
+    return result;
 }
 
 async function resolveSoundCloud(url) {

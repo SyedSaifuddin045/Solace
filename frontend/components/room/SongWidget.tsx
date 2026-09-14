@@ -1,31 +1,38 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Play, Pause, Music } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { formatRemaining } from "@/lib/time";
+import { getAudioElement } from "@/components/room/VideoPlayer";
 
-function useNow(active: boolean) {
-  const [now, setNow] = useState(() => Date.now());
+function useAudioProgress(status: string) {
+  const [pos, setPos] = useState(0);
+  const [dur, setDur] = useState(0);
+
   useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => setNow(Date.now()), 500);
+    if (status !== "playing") return;
+    const id = setInterval(() => {
+      const audio = getAudioElement();
+      if (audio) {
+        setPos(audio.currentTime);
+        setDur(audio.duration || 0);
+      }
+    }, 250);
     return () => clearInterval(id);
-  }, [active]);
-  return now;
+  }, [status]);
+
+  return { pos, dur };
 }
 
 export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () => void; onOpenQueue?: () => void }) {
   const track = useRoomStore((s) => s.state.playback.track);
   const status = useRoomStore((s) => s.state.playback.status);
-  const position = useRoomStore((s) => s.state.playback.position);
-  const updatedAt = useRoomStore((s) => s.state.playback.updatedAt);
   const queue = useRoomStore((s) => s.state.queue);
   const [hover, setHover] = useState(false);
-  const now = useNow(hover && status === "playing");
+  const { pos: livePos, dur: liveDur } = useAudioProgress(status);
 
-  const livePos = status === "playing" ? position + (now - updatedAt) / 1000 : position;
-  const duration = track?.duration || 0;
+  const duration = liveDur || track?.duration || 0;
   const progress = duration > 0 ? Math.min(100, (livePos / duration) * 100) : 0;
 
   const displayTitle = track?.title || track?.url?.split("/").pop() || "ambient silence";

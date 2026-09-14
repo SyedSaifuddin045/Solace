@@ -8,6 +8,7 @@ export interface Track {
   artwork?: string;
   duration?: number;
   provider?: string;
+  audioUrl?: string;
 }
 export interface Playback { status: PlaybackStatus; track: Track | null; position: number; updatedAt: number }
 export interface WallpaperState { url: string | null; kind: "image" | "video"; changedBy: string | null; updatedAt: number }
