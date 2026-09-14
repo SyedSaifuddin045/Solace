@@ -60,12 +60,14 @@ function createPlaybackHandler(io, roomService) {
             }
         },
 
-        handlePause(socket) {
+        handlePause(socket, payload) {
             const room = assertRoom(socket);
             if (!room) return;
             try {
+                const position = payload && typeof payload.position === "number" ? payload.position : undefined;
                 const { room: updatedRoom, change } = roomService.setPlayback(room.id, socket.id, {
-                    status: "paused"
+                    status: "paused",
+                    position
                 });
                 broadcast(updatedRoom, change, socket.id);
                 appendActivity(updatedRoom, socket, "paused playback");

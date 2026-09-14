@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Play, Pause, Music } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
@@ -31,6 +31,7 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
   const queue = useRoomStore((s) => s.state.queue);
   const [hover, setHover] = useState(false);
   const { pos: livePos, dur: liveDur } = useAudioProgress(status);
+  const progressRef = useRef<HTMLDivElement>(null);
 
   const duration = liveDur || track?.duration || 0;
   const progress = duration > 0 ? Math.min(100, (livePos / duration) * 100) : 0;
@@ -40,9 +41,24 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
 
   const toggle = () => {
     const s = getSocket();
-    if (status === "playing") s.emit("playback:pause");
-    else s.emit("playback:play");
+    if (status === "playing") {
+      const audio = getAudioElement();
+      const pos = audio ? audio.currentTime : 0;
+      s.emit("playback:pause", { position: pos });
+    } else {
+      s.emit("playback:play");
+    }
   };
+
+  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressRef.current || !duration) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const seekTo = ratio * duration;
+    const audio = getAudioElement();
+    if (audio) audio.currentTime = seekTo;
+    getSocket().emit("playback:seek", { position: seekTo });
+  }, [duration]);
 
   return (
     <div
@@ -53,7 +69,6 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
       {hover ? (
         <div className="min-w-[220px]">
           <div className="flex items-center gap-2.5 mb-2">
-            {/* Artwork */}
             {track?.artwork ? (
               <img src={track.artwork} alt="" className="w-10 h-10 rounded-md object-cover shrink-0" />
             ) : (
@@ -67,12 +82,17 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
             </div>
           </div>
 
-          {/* Progress */}
+          {/* Progress — clickable for seek */}
           <div className="flex items-center gap-2">
             <button onClick={toggle} aria-label={status === "playing" ? "Pause" : "Play"} className="grid place-items-center w-6 h-6 rounded-full shrink-0" style={{ background: "rgba(224,164,88,0.16)", color: "var(--accent-amber)" }}>
               {status === "playing" ? <Pause size={12} /> : <Play size={12} />}
             </button>
-            <div className="flex-1 h-[3px] rounded relative" style={{ background: "rgba(237,224,210,0.15)" }}>
+            <div
+              ref={progressRef}
+              onClick={handleSeek}
+              className="flex-1 h-[3px] rounded relative cursor-pointer"
+              style={{ background: "rgba(237,224,210,0.15)" }}
+            >
               <div className="h-full rounded" style={{ width: `${progress}%`, background: "var(--accent-amber)" }} />
             </div>
             <span className="text-[9px] opacity-60 tabular-nums">
@@ -93,7 +113,6 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
         </div>
       ) : (
         <div className="flex items-center gap-3">
-          {/* Eq bars or artwork */}
           {track?.artwork ? (
             <img src={track.artwork} alt="" className="w-8 h-8 rounded-sm object-cover shrink-0" />
           ) : (

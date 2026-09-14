@@ -93,35 +93,46 @@ export function TimerCenter() {
 
   return (
     <>
-      {/* idle: hidden, reveal set-timer on hover */}
+      {/* idle: hover zone always active, reveals set-timer on hover */}
       {mounted && timer.status === "idle" && (
         <div
           className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto"
           onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
+          onMouseLeave={() => { if (!dialOpen) setHovered(false); }}
         >
-          <button
-            onClick={() => {
-              setDialValue(pending ?? loadPrefs().lastTimerMinutes);
-              setDialOpen(true);
-              setHovered(true);
-            }}
-            className={`transition-opacity duration-300 ${hovered ? "opacity-80" : "opacity-0"} pointer-events-auto hairline rounded-full px-3 py-1 text-[10px] flex items-center gap-1`}
-          >
-            <Clock size={10} />
-            {dialOpen && (
-              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-[180px]" style={{ aspectRatio: "11/12" }}>
+          {!dialOpen ? (
+            <button
+              onClick={() => {
+                setDialValue(pending ?? loadPrefs().lastTimerMinutes);
+                setDialOpen(true);
+                setHovered(true);
+              }}
+              className={`transition-opacity duration-300 ${hovered ? "opacity-80" : "opacity-0"} pointer-events-auto hairline rounded-full px-3 py-1 text-[10px] flex items-center gap-1`}
+            >
+              <Clock size={10} />
+            </button>
+          ) : (
+            <div className="glass rounded-xl p-3 flex flex-col items-center gap-2" style={{ background: "rgba(26,22,20,0.92)" }}>
+              <div className="w-[180px]" style={{ aspectRatio: "11/12" }}>
                 <ClockDial value={dialValue} onChange={setDialValue} />
+              </div>
+              <div className="flex gap-2 w-full">
                 <button
-                  onClick={(e) => { e.stopPropagation(); startTimer(dialValue); }}
-                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full px-4 py-1 text-[11px] font-medium"
+                  onClick={() => startTimer(dialValue)}
+                  className="flex-1 rounded-lg px-3 py-1.5 text-[11px] font-medium"
                   style={{ background: "var(--accent-amber)", color: "#14110F" }}
                 >
                   set
                 </button>
+                <button
+                  onClick={() => { setDialOpen(false); setHovered(false); }}
+                  className="flex-1 hairline rounded-lg px-3 py-1.5 text-[11px] opacity-70"
+                >
+                  close
+                </button>
               </div>
-            )}
-          </button>
+            </div>
+          )}
         </div>
       )}
 
