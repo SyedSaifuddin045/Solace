@@ -51,7 +51,8 @@ function createPlaybackHandler(io, roomService) {
                 const track = payload && payload.track;
                 const { room: updatedRoom, change } = roomService.setPlayback(room.id, socket.id, {
                     status: "playing",
-                    track
+                    track,
+                    ...(track ? { position: 0 } : {})
                 });
                 broadcast(updatedRoom, change, socket.id);
                 appendActivity(updatedRoom, socket, change.track ? `played ${change.track.url}` : "played");
@@ -97,7 +98,8 @@ function createPlaybackHandler(io, roomService) {
             try {
                 const track = payload && payload.track;
                 const { room: updatedRoom, change } = roomService.setPlayback(room.id, socket.id, {
-                    track
+                    track,
+                    ...(track ? { position: 0 } : {})
                 });
                 broadcast(updatedRoom, change, socket.id);
                 appendActivity(updatedRoom, socket, change.track ? `set track ${change.track.url}` : "cleared track");

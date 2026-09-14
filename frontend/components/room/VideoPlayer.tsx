@@ -54,8 +54,14 @@ export function AudioPlayer() {
     if (audio.src !== audioUrl) {
       audio.src = audioUrl;
       audio.load();
+      // New track while status playing — resume playback after src swap
+      if (status === "playing") {
+        audio.play().catch(() => {
+          console.debug("[solace:FE] audio autoplay blocked — needs user gesture");
+        });
+      }
     }
-  }, [audioUrl]);
+  }, [audioUrl, status]);
 
   // Sync play/pause/seek with store — runs on every state change
   useEffect(() => {

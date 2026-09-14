@@ -36,7 +36,7 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
 
   const handleSetTrack = () => {
     if (!preview) return;
-    getSocket().emit("playback:set_track", { track: preview });
+    getSocket().emit("playback:play", { track: preview });
     onClose();
   };
 
