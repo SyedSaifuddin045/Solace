@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { X, Search, Music, Loader2 } from "lucide-react";
+import { X, Search, Music, Loader2, Play, ListPlus, Trash2 } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { resolveTrack } from "@/lib/track";
@@ -63,8 +63,7 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-30 grid place-items-center" style={{ background: "rgba(20,17,15,0.85)" }}>
       <div className="glass rounded-2xl px-6 py-5 max-w-md w-full mx-4 warm-glow">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-[12px]" style={{ color: "var(--accent-rose)" }}>set track</p>
+        <div className="flex items-center justify-end mb-4">
           <button aria-label="Close" onClick={onClose}><X size={14} className="opacity-60" /></button>
         </div>
 
@@ -81,11 +80,10 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
           <button
             onClick={handleResolve}
             disabled={resolving || !url.trim()}
-            className="rounded-lg px-3 py-2 text-[11px] flex items-center gap-1 disabled:opacity-50"
+            className="rounded-lg w-9 h-9 grid place-items-center disabled:opacity-50"
             style={{ background: "rgba(224,164,88,0.16)", color: "var(--accent-amber)" }}
           >
-            {resolving ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
-            resolve
+            {resolving ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
           </button>
         </div>
 
@@ -116,10 +114,10 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
         {/* No track placeholder */}
         {!preview && !track && (
           <div
-            className="rounded-lg p-4 mb-4 text-center"
+            className="rounded-lg p-4 mb-4 grid place-items-center"
             style={{ background: "var(--depth-2)", border: "1px solid rgba(237,224,210,0.1)" }}
           >
-            <p className="text-[11px] opacity-40">no track set — paste a link above</p>
+            <Music size={16} className="opacity-20" />
           </div>
         )}
 
@@ -138,36 +136,38 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
             )}
             <div className="flex-1 min-w-0">
               <p className="text-[11px] truncate">{track.title || track.url.split("/").pop() || "current track"}</p>
-              <p className="text-[9px] opacity-40">currently set</p>
             </div>
           </div>
         )}
 
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 justify-center">
           <button
             onClick={handleSetTrack}
             disabled={!preview}
-            className="flex-1 rounded-full px-4 py-2 text-[11px] font-medium disabled:opacity-50"
+            className="rounded-full w-9 h-9 grid place-items-center disabled:opacity-50"
             style={{ background: "var(--accent-amber)", color: "#14110F" }}
+            title="Play now"
           >
-            play now
+            <Play size={14} />
           </button>
           <button
             onClick={handleAddToQueue}
             disabled={!preview}
-            className="flex-1 rounded-full px-4 py-2 text-[11px] font-medium disabled:opacity-50"
+            className="rounded-full w-9 h-9 grid place-items-center disabled:opacity-50"
             style={{ background: "rgba(224,164,88,0.16)", color: "var(--accent-amber)" }}
+            title="Add to queue"
           >
-            add to queue
+            <ListPlus size={14} />
           </button>
           {track && (
             <button
               onClick={handleClearTrack}
-              className="rounded-full px-4 py-2 text-[11px]"
+              className="rounded-full w-9 h-9 grid place-items-center"
               style={{ background: "rgba(201,124,110,0.16)", color: "var(--accent-rose)" }}
+              title="Clear track"
             >
-              clear
+              <Trash2 size={14} />
             </button>
           )}
         </div>

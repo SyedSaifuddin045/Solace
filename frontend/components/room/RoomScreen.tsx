@@ -203,7 +203,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
         className="absolute inset-0 pointer-events-none transition-[right] duration-300 ease-out"
         style={{ right: activePanel !== "none" ? "25rem" : "0" }}
       >
-        <div className="relative h-full flex justify-center">
+        <div className="relative h-full flex justify-center pointer-events-auto">
           <TimerCenter />
         </div>
       </div>
