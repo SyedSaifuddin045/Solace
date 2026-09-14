@@ -20,6 +20,7 @@ const SOUNDCLOUD_PATTERNS = [
 
 const CACHE_MAX = 500;
 const CACHE_TTL_MS = 60 * 60 * 1000;
+const MAX_RESPONSE_BYTES = 256 * 1024; // 256KB cap on external JSON responses
 
 const cache = new Map();
 
@@ -45,7 +46,16 @@ function fetchJSON(url) {
                 return reject(new Error(`HTTP ${res.statusCode}`));
             }
             let data = "";
-            res.on("data", (chunk) => { data += chunk; });
+            let size = 0;
+            res.on("data", (chunk) => {
+                size += chunk.length;
+                if (size > MAX_RESPONSE_BYTES) {
+                    req.destroy();
+                    reject(new Error("response too large"));
+                    return;
+                }
+                data += chunk;
+            });
             res.on("end", () => {
                 try { resolve(JSON.parse(data)); }
                 catch (e) { reject(e); }
@@ -72,7 +82,16 @@ function postJSON(url, body, headers = {}) {
             },
         }, (res) => {
             let data = "";
-            res.on("data", (chunk) => { data += chunk; });
+            let size = 0;
+            res.on("data", (chunk) => {
+                size += chunk.length;
+                if (size > MAX_RESPONSE_BYTES) {
+                    req.destroy();
+                    reject(new Error("response too large"));
+                    return;
+                }
+                data += chunk;
+            });
             res.on("end", () => {
                 try { resolve(JSON.parse(data)); }
                 catch (e) { reject(e); }
