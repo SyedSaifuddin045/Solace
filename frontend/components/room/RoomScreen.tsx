@@ -179,12 +179,10 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
         {/* media controls — bottom center, shifts with panel */}
         <div
-          className="absolute bottom-4 left-0 pointer-events-auto transition-[right] duration-300 ease-out"
-          style={{ right: activePanel !== "none" ? "25rem" : "0" }}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-auto transition-[left] duration-300 ease-out"
+          style={{ left: activePanel !== "none" ? "calc(50% - 12.5rem)" : "50%" }}
         >
-          <div className="flex justify-center">
-            <MediaControls />
-          </div>
+          <MediaControls />
         </div>
 
         <ChromeReveal className="shrink-0 max-w-[60%]">

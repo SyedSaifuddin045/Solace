@@ -62,7 +62,8 @@ export function TimerCenter() {
     setMinimized(true);
   };
 
-  const hintVisible = mounted && minimized;
+  const hintVisible = mounted && minimized && timer.status !== "idle";
+  const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     if (hintVisible) {
@@ -92,6 +93,38 @@ export function TimerCenter() {
 
   return (
     <>
+      {/* idle: hidden, reveal set-timer on hover */}
+      {mounted && timer.status === "idle" && (
+        <div
+          className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto"
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
+          <button
+            onClick={() => {
+              setDialValue(pending ?? loadPrefs().lastTimerMinutes);
+              setDialOpen(true);
+              setHovered(true);
+            }}
+            className={`transition-opacity duration-300 ${hovered ? "opacity-80" : "opacity-0"} pointer-events-auto hairline rounded-full px-3 py-1 text-[10px] flex items-center gap-1`}
+          >
+            <Clock size={10} />
+            {dialOpen && (
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-[180px]" style={{ aspectRatio: "11/12" }}>
+                <ClockDial value={dialValue} onChange={setDialValue} />
+                <button
+                  onClick={(e) => { e.stopPropagation(); startTimer(dialValue); }}
+                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full px-4 py-1 text-[11px] font-medium"
+                  style={{ background: "var(--accent-amber)", color: "#14110F" }}
+                >
+                  set
+                </button>
+              </div>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* minimized: amber pulse hint (auto-expands on hover or click) */}
       {hintVisible && (
         <button
@@ -110,59 +143,23 @@ export function TimerCenter() {
       )}
 
       {/* expanded card */}
-      {!minimized && (
+      {!minimized && timer.status !== "idle" && (
         <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 z-20 glass rounded-xl px-5 py-2.5 text-center warm-glow chrome max-w-[90vw] sm:bottom-auto bottom-20 pointer-events-auto">
-          {timer.status !== "idle" && (
-            <>
-              <p className="text-[10px] opacity-50 mb-0.5">pomodoro · {timer.status}</p>
-              <p className="text-xl font-light tracking-wide leading-none" style={{ color: "var(--accent-amber)" }}>{formatRemaining(running || timer.status === "paused" ? remainingMs : timer.durationMs)}</p>
-              <div className="h-[3px] rounded mt-1.5 mb-2" style={{ background: "rgba(237,224,210,0.15)" }}>
-                <div className="h-full rounded transition-all duration-300" style={{ width: `${timer.durationMs > 0 ? Math.min(100, Math.max(0, (remainingMs / timer.durationMs) * 100)) : 0}%`, background: "var(--accent-amber)" }} />
-              </div>
-            </>
-          )}
-          {timer.status === "idle" && (
-            <div className="flex items-center gap-1.5 justify-center">
-              {dialOpen ? (
-                <div className="relative w-full max-w-[220px] max-sm:max-w-[180px] mx-auto" style={{ aspectRatio: "11/12" }}>
-                  <ClockDial
-                    value={dialValue}
-                    onChange={setDialValue}
-                  />
-                  <button
-                    onClick={() => startTimer(dialValue)}
-                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full px-4 py-1 text-[11px] font-medium"
-                    style={{ background: "var(--accent-amber)", color: "#14110F" }}
-                  >
-                    set
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => {
-                    setDialValue(pending ?? loadPrefs().lastTimerMinutes);
-                    setDialOpen(true);
-                  }}
-                  className="hairline rounded-full px-3 py-1 text-[10px] flex items-center gap-1"
-                >
-                  <Clock size={10} />
-                  <span>set timer</span>
-                </button>
-              )}
-            </div>
-          )}
-          {timer.status !== "idle" && (
-            <div className="flex items-center gap-1.5 justify-center">
-              {timer.status === "running" && (
-                <button onClick={pause} aria-label="Pause" className="hairline rounded-full p-1.5 text-[10px]"><Pause size={10} /></button>
-              )}
-              {timer.status === "paused" && (
-                <button onClick={resume} aria-label="Resume" className="hairline rounded-full p-1.5 text-[10px]"><Play size={10} /></button>
-              )}
-              <button onClick={reset} aria-label="Reset" className="hairline rounded-full p-1.5 text-[10px]"><RotateCcw size={10} /></button>
-              <button onClick={minimize} aria-label="Minimize" className="hairline rounded-full p-1.5 text-[10px]"><Minimize2 size={10} /></button>
-            </div>
-          )}
+          <p className="text-[10px] opacity-50 mb-0.5">pomodoro · {timer.status}</p>
+          <p className="text-xl font-light tracking-wide leading-none" style={{ color: "var(--accent-amber)" }}>{formatRemaining(running || timer.status === "paused" ? remainingMs : timer.durationMs)}</p>
+          <div className="h-[3px] rounded mt-1.5 mb-2" style={{ background: "rgba(237,224,210,0.15)" }}>
+            <div className="h-full rounded transition-all duration-300" style={{ width: `${timer.durationMs > 0 ? Math.min(100, Math.max(0, (remainingMs / timer.durationMs) * 100)) : 0}%`, background: "var(--accent-amber)" }} />
+          </div>
+          <div className="flex items-center gap-1.5 justify-center">
+            {timer.status === "running" && (
+              <button onClick={pause} aria-label="Pause" className="hairline rounded-full p-1.5 text-[10px]"><Pause size={10} /></button>
+            )}
+            {timer.status === "paused" && (
+              <button onClick={resume} aria-label="Resume" className="hairline rounded-full p-1.5 text-[10px]"><Play size={10} /></button>
+            )}
+            <button onClick={reset} aria-label="Reset" className="hairline rounded-full p-1.5 text-[10px]"><RotateCcw size={10} /></button>
+            <button onClick={minimize} aria-label="Minimize" className="hairline rounded-full p-1.5 text-[10px]"><Minimize2 size={10} /></button>
+          </div>
         </div>
       )}
     </>
