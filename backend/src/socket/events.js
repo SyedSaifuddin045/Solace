@@ -21,7 +21,8 @@ const CLIENT = {
     PLAYBACK_QUEUE_ADD: "playback:queue_add",
     PLAYBACK_QUEUE_REMOVE: "playback:queue_remove",
     PLAYBACK_QUEUE_CLEAR: "playback:queue_clear",
-    PLAYBACK_SKIP: "playback:skip"
+    PLAYBACK_SKIP: "playback:skip",
+    ROOM_CHECK: "room:check"
 };
 
 const SERVER = {
@@ -42,7 +43,8 @@ const SERVER = {
     RTC_MEDIA_STATE: "rtc:media_state",
     RTC_OFFER: "rtc:offer",
     RTC_ANSWER: "rtc:answer",
-    RTC_ICE: "rtc:ice"
+    RTC_ICE: "rtc:ice",
+    ROOM_CHECK_RESULT: "room:check_result"
 };
 
 module.exports = { CLIENT, SERVER };

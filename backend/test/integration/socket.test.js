@@ -262,24 +262,52 @@ test("non-member activity:send -> room:error NOT_IN_ROOM", async () => {
     assert.equal(err.code, "NOT_IN_ROOM");
 });
 
-describe("WebRTC relay + media presence", () => {
-    test("rtc:config arrives with STUN on connect", async () => {
+describe("room check", () => {
+    test("room:check on non-existent room -> room:error ROOM_NOT_FOUND", async () => {
         const { port } = await boot();
-        const socket = ioc(`http://localhost:${port}`, { transports: ["websocket"] });
-        const cfgP = new Promise((resolve) => socket.once("rtc:config", resolve));
-        await new Promise((resolve, reject) => {
-            const onConnect = () => {
-                socket.off("connect_error", onError);
-                resolve();
-            };
-            const onError = (e) => {
-                socket.off("connect", onConnect);
-                reject(e);
-            };
-            socket.once("connect_error", onError);
-            socket.once("connect", onConnect);
-        });
-        track(socket);
+        const client = track(await connectClient(port));
+        const errP = waitForEvent(client, "room:error", (p) => p.code === "ROOM_NOT_FOUND");
+        client.emit("room:check", { roomId: "ZZZZZZ" });
+        const err = await errP;
+        assert.equal(err.code, "ROOM_NOT_FOUND");
+    });
+
+    test("room:check on public room -> room:check_result with protected false", async () => {
+        const { port } = await boot();
+        const { roomId } = await createRoom(port, "Host");
+        const client = track(await connectClient(port));
+        const resultP = waitForEvent(client, "room:check_result");
+        client.emit("room:check", { roomId });
+        const result = await resultP;
+        assert.equal(result.roomId, roomId);
+        assert.equal(result.protected, false);
+    });
+
+    test("room:check on password-protected room -> room:check_result with protected true", async () => {
+        const { port } = await boot();
+        const host = track(await connectClient(port));
+        const createdP = waitForEvent(host, "room:created");
+        host.emit("room:create", { displayName: "Host", password: "secret" });
+        const created = await createdP;
+        const client = track(await connectClient(port));
+        const resultP = waitForEvent(client, "room:check_result");
+        client.emit("room:check", { roomId: created.roomId });
+        const result = await resultP;
+        assert.equal(result.roomId, created.roomId);
+        assert.equal(result.protected, true);
+    });
+});
+
+describe("WebRTC relay + media presence", () => {
+    test("rtc:config arrives with STUN after joining a room", async () => {
+        const { port } = await boot();
+        // Bind BEFORE create so the post-join emit is not missed
+        const client = track(await connectClient(port));
+        const cfgP = new Promise((resolve) => client.once("rtc:config", resolve));
+        const createdP = waitForEvent(client, "room:created");
+        client.emit("room:create", { displayName: "Host" });
+        const created = await createdP;
+        assert.ok(created.roomId);
         const cfg = await cfgP;
         assert.ok(cfg.iceServers.length >= 1);
         assert.match(cfg.iceServers[0].urls[0], /^stun:/);

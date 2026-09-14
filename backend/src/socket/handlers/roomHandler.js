@@ -6,12 +6,13 @@ function createRoomHandler(io, roomService) {
     }
 
     return {
-        handleCreate(socket, payload) {
+        handleCreate(socket, payload, emitIceConfig) {
             try {
                 const displayName = payload && payload.displayName;
                 const password = payload && payload.password;
                 const { roomId, room } = roomService.createRoom(displayName, socket.id, password);
                 socket.join(roomId);
+                if (typeof emitIceConfig === "function") emitIceConfig();
                 roomService.appendActivity(roomId, {
                     type: "system",
                     actor: { socketId: socket.id, displayName },
@@ -28,13 +29,14 @@ function createRoomHandler(io, roomService) {
             }
         },
 
-        handleJoin(socket, payload) {
+        handleJoin(socket, payload, emitIceConfig) {
             try {
                 const roomId = payload && payload.roomId;
                 const displayName = payload && payload.displayName;
                 const password = payload && payload.password;
                 const room = roomService.joinRoom(roomId, socket.id, displayName, password);
                 socket.join(roomId);
+                if (typeof emitIceConfig === "function") emitIceConfig();
                 const { entry: joinEntry } = roomService.appendActivity(roomId, {
                     type: "system",
                     actor: { socketId: socket.id, displayName },
@@ -93,6 +95,20 @@ function createRoomHandler(io, roomService) {
                     members: pub.members,
                     state: pub.state
                 });
+            } catch (err) {
+                emitError(socket, err);
+            }
+        },
+
+        handleCheck(socket, payload) {
+            try {
+                const roomId = payload && payload.roomId;
+                if (typeof roomId !== "string" || roomId.trim().length === 0) {
+                    socket.emit(SERVER.ROOM_ERROR, { code: "INVALID_PAYLOAD", message: "roomId must be a non-empty string" });
+                    return;
+                }
+                const result = roomService.checkRoom(roomId);
+                socket.emit(SERVER.ROOM_CHECK_RESULT, { roomId: result.roomId, protected: result.protected });
             } catch (err) {
                 emitError(socket, err);
             }

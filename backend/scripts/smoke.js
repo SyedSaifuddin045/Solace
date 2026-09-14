@@ -29,31 +29,16 @@ function portOf() {
     return Number(new URL(url).port || 80);
 }
 
-// rtc:config is emitted during the connect handshake, so the listener must be
-// bound BEFORE the connect promise resolves (same race the integration suite
-// solves by binding pre-connect).
+// rtc:config is emitted AFTER a successful room create/join (not on bare
+// connect), so listeners are bound just before those emits.
 async function connect(name) {
     const socket = ioc(`http://localhost:${portOf()}`, { transports: ["websocket"] });
     allSockets.push(socket);
-    // Never leave a dangling rejection: on connect_error the config promise can
-    // only fail by timeout later, so convert that outcome into a sentinel the
-    // caller converts into a proper step failure.
-    const configP = waitForEvent(socket, "rtc:config", (p) => Array.isArray(p.iceServers), STEP_TIMEOUT_MS)
-        .catch((err) => ({ __smokeError: err }));
     await new Promise((resolve, reject) => {
         socket.once("connect", resolve);
         socket.once("connect_error", reject);
     });
-    return { socket, configP };
-}
-
-// Await a config promise produced by connect(): rethrows as a real failure.
-async function configOrThrow(configP, label) {
-    const maybe = await configP;
-    if (maybe && maybe.__smokeError) {
-        throw new Error(`${label}: rtc:config never arrived (${maybe.__smokeError.message})`);
-    }
-    return maybe;
+    return { socket };
 }
 
 function pass(name, detail = "") {
@@ -72,35 +57,44 @@ async function waitFor(socket, event, predicate, description) {
 
 async function scenario() {
     console.log(`smoke: connecting two clients${url ? ` -> ${url}` : " (local server)"}`);
-    const { socket: A, configP: cfgAP } = await connect("Host");
-    const { socket: B, configP: cfgBP } = await connect("Guest");
+    const { socket: A } = await connect("Host");
+    const { socket: B } = await connect("Guest");
 
     try {
-        // 1. rtc:config on connect (STUN always present)
-        console.log("\n[1] transport readiness");
-        const cfgA = await configOrThrow(cfgAP, "Host");
-        const cfgB = await configOrThrow(cfgBP, "Guest");
-        pass("rtc:config present on connect for both clients",
-            `${cfgA.iceServers.length} A + ${cfgB.iceServers.length} B ice servers`);
-
-        // 2. host creates room
-        console.log("\n[2] room lifecycle");
+        // 2. host creates room (rtc:config follows successful create)
+        console.log("\n[1] room lifecycle");
+        const cfgAP = waitForEvent(A, "rtc:config", (p) => Array.isArray(p.iceServers), STEP_TIMEOUT_MS);
         const createdP = waitFor(A, "room:created");
         A.emit("room:create", { displayName: "Host" });
-        const created = await createdP;
+        const [created, cfgA] = await Promise.all([createdP, cfgAP]);
         const roomId = created.roomId;
         pass("host creates room", `roomId=${roomId}`);
+        pass("rtc:config present after create", `${cfgA.iceServers.length} ice servers`);
         if (created.members.length !== 1 || !created.members[0].isHost) {
             throw new Error(`creator not reflected as sole host member: ${JSON.stringify(created.members)}`);
         }
 
-        // 3. guest joins and sees host
+        // 3. guest joins and sees host (rtc:config follows successful join)
+        const cfgBP = waitForEvent(B, "rtc:config", (p) => Array.isArray(p.iceServers), STEP_TIMEOUT_MS);
         const joinedP = waitFor(B, "room:joined", (p) => p.members.length === 2);
         B.emit("room:join", { roomId, displayName: "Guest" });
-        const joined = await joinedP;
+        const [joined, cfgB] = await Promise.all([joinedP, cfgBP]);
+        pass("rtc:config present after join", `${cfgB.iceServers.length} ice servers`);
         const hostInSnapshot = joined.members.some((m) => m.isHost && m.socketId === A.id);
         if (!hostInSnapshot) throw new Error("host missing from guest join snapshot");
         pass("guest joins, snapshot has both members + host flag");
+
+        // 3b. room:check — public room
+        const checkP = waitFor(A, "room:check_result", (p) => p.roomId === roomId && p.protected === false);
+        A.emit("room:check", { roomId });
+        await checkP;
+        pass("room:check on public room -> protected false");
+
+        // 3c. room:check — non-existent room
+        const checkErrP = waitFor(A, "room:error", (p) => p.code === "ROOM_NOT_FOUND");
+        A.emit("room:check", { roomId: "ZZZZZZ" });
+        await checkErrP;
+        pass("room:check on missing room -> ROOM_NOT_FOUND");
 
         // 4. host sets wallpaper -> guest receives state
         console.log("\n[3] shared state sync");
@@ -117,6 +111,7 @@ async function scenario() {
         ]);
         const formData = new FormData();
         formData.append("roomId", roomId);
+        formData.append("socketId", B.id);
         formData.append("file", new Blob([pngBytes]), "smoke-wall.png");
         // bind before upload: the room broadcast lands while the HTTP response
         // is still round-tripping, so a late listener can miss it
