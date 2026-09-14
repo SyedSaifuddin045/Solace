@@ -85,13 +85,14 @@ export function TimerCenter() {
 
   return (
     <>
-      {/* minimized: amber pulse hint (auto-expands on pause/idle) */}
+      {/* minimized: amber pulse hint (auto-expands on hover or click) */}
       {hintVisible && (
         <button
           onClick={() => {
             console.debug("[solace:FE] TimerCenter expand", { running, idle, minimized });
             setMinimized(false);
           }}
+          onMouseEnter={() => setMinimized(false)}
           className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 opacity-80 hover:opacity-100"
           style={{ color: "var(--accent-amber)" }}
           aria-label="show timer"
