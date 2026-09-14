@@ -1,8 +1,13 @@
 const fs = require("node:fs");
+const fsAsync = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { ROOM_ID_PATTERN } = require("../rooms/RoomService");
 
 const ROOT = () => process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads");
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+// Global upload budget across ALL rooms (prevents disk exhaustion)
+const GLOBAL_UPLOAD_BUDGET_BYTES = 500 * 1024 * 1024;
 
 const SIGNATURES = [
     { mime: "image/jpeg", kind: "image", ext: "jpg", match: (b) => b.length > 2 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
@@ -30,6 +35,14 @@ class UnsupportedMediaError extends Error {
     }
 }
 
+class StorageLimitError extends Error {
+    constructor(message = "Storage limit reached") {
+        super(message);
+        this.name = "StorageLimitError";
+        this.code = "STORAGE_LIMIT_REACHED";
+    }
+}
+
 function sniffKind(buffer) {
     const sig = SIGNATURES.find((s) => s.match(buffer));
     if (!sig) throw new UnsupportedMediaError("Unsupported media type");
@@ -43,6 +56,32 @@ function assertInsideRoot(root, absPath) {
     }
 }
 
+function assertValidRoomId(roomId) {
+    if (typeof roomId !== "string" || !ROOM_ID_PATTERN.test(roomId)) {
+        throw new Error("Invalid room id");
+    }
+}
+
+async function dirSize(dir) {
+    let total = 0;
+    let entries;
+    try {
+        entries = await fsAsync.readdir(dir, { withFileTypes: true });
+    } catch {
+        return 0;
+    }
+    for (const entry of entries) {
+        const abs = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            total += await dirSize(abs);
+        } else if (entry.isFile()) {
+            const stat = await fsAsync.stat(abs);
+            total += stat.size;
+        }
+    }
+    return total;
+}
+
 function createUploadStore() {
     const root = ROOT();
     // Wipe contents (not the dir itself — Docker volume mount breaks rmSync on root)
@@ -53,31 +92,41 @@ function createUploadStore() {
     }
     fs.mkdirSync(root, { recursive: true });
 
-    function save(roomId, fileName, buffer) {
+    async function save(roomId, fileName, buffer) {
+        // Validate BEFORE any filesystem side effects
+        assertValidRoomId(roomId);
+        if (typeof fileName !== "string" || !/^[a-f0-9-]+\.\w{2,5}$/.test(fileName)) {
+            throw new Error("Invalid file name");
+        }
         const roomDir = path.join(root, roomId);
-        fs.mkdirSync(roomDir, { recursive: true });
+        await fsAsync.mkdir(roomDir, { recursive: true });
         const abs = path.join(roomDir, fileName);
         assertInsideRoot(root, abs);
-        fs.writeFileSync(abs, buffer);
+        await fsAsync.writeFile(abs, buffer);
         return { url: `/uploads/${roomId}/${fileName}` };
     }
 
-    function buildMeta(roomId, originalName, buffer, size, uploadedBy, uploadedAt) {
+    async function buildMeta(roomId, originalName, buffer, size, uploadedBy, uploadedAt) {
+        // Check global budget BEFORE writing
+        const currentBytes = await dirSize(root);
+        if (currentBytes + buffer.length > GLOBAL_UPLOAD_BUDGET_BYTES) {
+            throw new StorageLimitError();
+        }
         const { kind, ext, contentType } = sniffKind(buffer);
         const id = crypto.randomUUID();
         const fileName = `${id}.${ext}`;
-        const { url } = save(roomId, fileName, buffer);
+        const { url } = await save(roomId, fileName, buffer);
         return { id, url, kind, contentType, size, originalName, uploadedBy, uploadedAt };
     }
 
-    function deleteByUrl(url) {
+    async function deleteByUrl(url) {
         if (typeof url !== "string" || !url.startsWith("/uploads/")) throw new Error("Invalid upload path");
         const abs = path.join(root, url.replace(/^\/uploads\//, ""));
         assertInsideRoot(root, abs);
-        fs.rmSync(abs, { force: true });
+        await fsAsync.rm(abs, { force: true });
     }
 
-    return { save, buildMeta, deleteByUrl, root, contentTypeOf: (ext) => CONTENT_TYPES[ext] || "application/octet-stream" };
+    return { save, buildMeta, deleteByUrl, root, dirSize, GLOBAL_UPLOAD_BUDGET_BYTES, contentTypeOf: (ext) => CONTENT_TYPES[ext] || "application/octet-stream" };
 }
 
-module.exports = { createUploadStore, sniffKind, UnsupportedMediaError, SIGNATURES, CONTENT_TYPES };
+module.exports = { createUploadStore, sniffKind, UnsupportedMediaError, StorageLimitError, SIGNATURES, CONTENT_TYPES, GLOBAL_UPLOAD_BUDGET_BYTES, MAX_FILE_BYTES };

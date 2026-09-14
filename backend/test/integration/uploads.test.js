@@ -13,9 +13,10 @@ const MP4 = Buffer.concat([Buffer.alloc(4), Buffer.from("ftypmp42"), Buffer.allo
 const TEXT = Buffer.from("definitely not media");
 const BIG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(20 * 1024 * 1024)]);
 
-async function upload(port, roomId, fileBuffer, fileName) {
+async function upload(port, roomId, fileBuffer, fileName, socketId) {
     const form = new FormData();
     form.append("roomId", roomId);
+    if (socketId !== undefined) form.append("socketId", socketId);
     form.append("file", new Blob([fileBuffer]), fileName);
     const res = await fetch(`http://127.0.0.1:${port}/uploads`, { method: "POST", body: form });
     let body = null;
@@ -73,7 +74,7 @@ describe("uploads", () => {
         const { port } = await boot();
         const { client: host, roomId } = await createRoom(port, "Host");
         const libP = waitForEvent(host, "wallpaper:uploads", (p) => p.uploads && p.uploads.length === 1);
-        const res = await upload(port, roomId, PNG, "wall.png");
+        const res = await upload(port, roomId, PNG, "wall.png", host.id);
         const lib = await libP;
         assert.equal(res.status, 201);
         assert.equal(res.body.kind, "image");
@@ -84,41 +85,58 @@ describe("uploads", () => {
 
     test("uploads a video file", async () => {
         const { port } = await boot();
-        const { roomId } = await createRoom(port, "Host");
-        const res = await upload(port, roomId, MP4, "loop.mp4");
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const res = await upload(port, roomId, MP4, "loop.mp4", host.id);
         assert.equal(res.status, 201);
         assert.equal(res.body.kind, "video");
     });
 
     test("rejects non-media bytes with 415", async () => {
         const { port } = await boot();
-        const { roomId } = await createRoom(port, "Host");
-        const res = await upload(port, roomId, TEXT, "fake.png");
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const res = await upload(port, roomId, TEXT, "fake.png", host.id);
         assert.equal(res.status, 415);
     });
 
     test("rejects oversized file with 413", async () => {
         const { port } = await boot();
-        const { roomId } = await createRoom(port, "Host");
-        const res = await upload(port, roomId, BIG, "big.png");
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const res = await upload(port, roomId, BIG, "big.png", host.id);
         assert.equal(res.status, 413);
     });
 
-    test("rejects unknown room with 404", async () => {
+    test("rejects upload to a room the socket is not a member of with 403", async () => {
         const { port } = await boot();
-        await createRoom(port, "Host");
-        const res = await upload(port, "ZZZZZZ", PNG, "nope.png");
-        assert.equal(res.status, 404);
+        const { client: host } = await createRoom(port, "Host");
+        const res = await upload(port, "ZZZZZZ", PNG, "nope.png", host.id);
+        assert.equal(res.status, 403);
+        assert.equal(res.body.error, "FORBIDDEN");
+    });
+
+    test("rejects upload without socketId with 403", async () => {
+        const { port } = await boot();
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const res = await upload(port, roomId, PNG, "anon.png");
+        assert.equal(res.status, 403);
+        assert.equal(res.body.error, "FORBIDDEN");
+    });
+
+    test("rejects upload with malformed roomId with 400", async () => {
+        const { port } = await boot();
+        const { client: host } = await createRoom(port, "Host");
+        const res = await upload(port, "../../etc", PNG, "traversal.png", host.id);
+        assert.equal(res.status, 400);
+        assert.equal(res.body.error, "INVALID_ROOM_ID");
     });
 
     test("evicts oldest non-active upload on 4th entry", async () => {
         const { port } = await boot();
         const { client: host, roomId } = await createRoom(port, "Host");
-        const a = await upload(port, roomId, PNG, "a.png");
-        await upload(port, roomId, PNG, "b.png");
-        await upload(port, roomId, PNG, "c.png");
+        const a = await upload(port, roomId, PNG, "a.png", host.id);
+        await upload(port, roomId, PNG, "b.png", host.id);
+        await upload(port, roomId, PNG, "c.png", host.id);
         const waitP = waitForEvent(host, "wallpaper:uploads", (p) => p.uploads && p.uploads.length === 3 && !p.uploads.some((u) => u.url === a.body.url));
-        const d = await upload(port, roomId, PNG, "d.png");
+        const d = await upload(port, roomId, PNG, "d.png", host.id);
         const lib = await waitP;
         assert.equal(d.status, 201);
         assert.equal(lib.uploads.length, 3);
@@ -128,22 +146,22 @@ describe("uploads", () => {
     test("keeps active wallpaper upload during eviction", async () => {
         const { port } = await boot();
         const { client: host, roomId } = await createRoom(port, "Host");
-        const active = await upload(port, roomId, PNG, "active.png");
+        const active = await upload(port, roomId, PNG, "active.png", host.id);
         const wsP = waitForEvent(host, "wallpaper:state", (p) => p.url === active.body.url);
         host.emit("wallpaper:set", { url: active.body.url, kind: "image" });
         await wsP;
-        await upload(port, roomId, PNG, "b.png");
-        await upload(port, roomId, PNG, "c.png");
-        await upload(port, roomId, PNG, "d.png");
-        await upload(port, roomId, PNG, "e.png");
+        await upload(port, roomId, PNG, "b.png", host.id);
+        await upload(port, roomId, PNG, "c.png", host.id);
+        await upload(port, roomId, PNG, "d.png", host.id);
+        await upload(port, roomId, PNG, "e.png", host.id);
         const { joined } = await joinRoom(port, roomId, "Obs");
         assert.ok(joined.state.wallpapers.some((w) => w.url === active.body.url), "active wallpaper survives eviction");
     });
 
     test("snapshot carries wallpapers library", async () => {
         const { port } = await boot();
-        const { roomId } = await createRoom(port, "Host");
-        await upload(port, roomId, PNG, "wall.png");
+        const { client: host, roomId } = await createRoom(port, "Host");
+        await upload(port, roomId, PNG, "wall.png", host.id);
         const { joined } = await joinRoom(port, roomId, "Obs");
         assert.equal(joined.state.wallpapers.length, 1);
     });
@@ -151,7 +169,7 @@ describe("uploads", () => {
     test("serves an uploaded file back with cache headers", async () => {
         const { port } = await boot();
         const { client: host, roomId } = await createRoom(port, "Host");
-        const { body } = await upload(port, roomId, PNG, "served.png");
+        const { body } = await upload(port, roomId, PNG, "served.png", host.id);
         const res = await fetch(`http://127.0.0.1:${port}${body.url}`);
         assert.equal(res.status, 200);
         assert.match(res.headers.get("content-type"), /image\/png/);
@@ -170,5 +188,36 @@ describe("uploads", () => {
         const { port } = await boot();
         const res = await fetch(`http://127.0.0.1:${port}/uploads/%2E%2E/%2E%2E/package.json`);
         assert.equal(res.status, 404);
+    });
+
+    test("POST /uploads returns Access-Control-Allow-Origin header", async () => {
+        const { port } = await boot();
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const form = new FormData();
+        form.append("roomId", roomId);
+        form.append("socketId", host.id);
+        form.append("file", new Blob([PNG]), "cors.png");
+        const res = await fetch(`http://127.0.0.1:${port}/uploads`, {
+            method: "POST",
+            body: form,
+            headers: { origin: "http://localhost:3000" }
+        });
+        assert.equal(res.status, 201);
+        assert.equal(res.headers.get("access-control-allow-origin"), "http://localhost:3000");
+    });
+
+    test("OPTIONS preflight to /uploads returns 204 with CORS headers", async () => {
+        const { port } = await boot();
+        const res = await fetch(`http://127.0.0.1:${port}/uploads`, {
+            method: "OPTIONS",
+            headers: {
+                origin: "http://localhost:3000",
+                "access-control-request-method": "POST",
+                "access-control-request-headers": "Content-Type"
+            }
+        });
+        assert.equal(res.status, 204);
+        assert.equal(res.headers.get("access-control-allow-origin"), "http://localhost:3000");
+        assert.equal(res.headers.get("access-control-allow-methods"), "GET,POST");
     });
 });
