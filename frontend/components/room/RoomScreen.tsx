@@ -182,7 +182,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
           className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-auto transition-[left] duration-300 ease-out"
           style={{ left: activePanel !== "none" ? "calc(50% - 12.5rem)" : "50%" }}
         >
-          <MediaControls />
+          <ChromeReveal className="shrink-0"><MediaControls /></ChromeReveal>
         </div>
 
         <ChromeReveal className="shrink-0 max-w-[60%]">
