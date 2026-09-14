@@ -57,41 +57,36 @@ export function AudioPlayer() {
     }
   }, [audioUrl]);
 
-  // Sync play/pause with store
+  // Sync play/pause/seek with store — runs on every state change
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !audioUrl) return;
 
-    const cmd = status === "playing" ? "play" : "pause";
-    if (cmd === lastStatusRef.current) return;
-    lastStatusRef.current = cmd;
-
-    if (cmd === "play") {
+    if (status === "playing") {
+      // Always recalculate target position on play/seek
       const elapsed = (Date.now() - updatedAt) / 1000;
       const targetTime = Math.max(0, position + elapsed);
       if (Math.abs(audio.currentTime - targetTime) > 2) {
         audio.currentTime = targetTime;
       }
-      audio.play().catch(() => {
-        console.debug("[solace:FE] audio play blocked — needs user gesture");
-      });
+      if (lastStatusRef.current !== "play") {
+        lastStatusRef.current = "play";
+        audio.play().catch(() => {
+          console.debug("[solace:FE] audio play blocked — needs user gesture");
+        });
+      }
     } else {
-      audio.pause();
+      // Paused — always sync position
+      const targetTime = Math.max(0, position);
+      if (Math.abs(audio.currentTime - targetTime) > 2) {
+        audio.currentTime = targetTime;
+      }
+      if (lastStatusRef.current !== "pause") {
+        lastStatusRef.current = "pause";
+        audio.pause();
+      }
     }
   }, [status, audioUrl, position, updatedAt]);
-
-  // Handle seek events
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !audioUrl || status !== "playing") return;
-    if (lastStatusRef.current !== "play") return;
-
-    const elapsed = (Date.now() - updatedAt) / 1000;
-    const targetTime = Math.max(0, position + elapsed);
-    if (Math.abs(audio.currentTime - targetTime) > 3) {
-      audio.currentTime = targetTime;
-    }
-  }, [position, updatedAt, status, audioUrl]);
 
   return null;
 }
