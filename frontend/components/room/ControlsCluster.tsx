@@ -26,6 +26,7 @@ function IconBtn({ label, children, active, tint, onClick }: { label: string; ch
 export function MediaControls() {
   const audioOn = useRoomStore((s) => s.audioOnLocal);
   const videoOn = useRoomStore((s) => s.videoOnLocal);
+  const router = useRouter();
 
   const toggleMedia = (kind: "audio" | "video") => {
     const nextAudio = kind === "audio" ? !audioOn : audioOn;
@@ -53,29 +54,28 @@ export function MediaControls() {
       <IconBtn label="Toggle camera" onClick={() => toggleMedia("video")} tint={videoOn ? undefined : "var(--status-error)"} active={videoOn}>
         {videoOn ? <Video size={14} strokeWidth={1.8} /> : <VideoOff size={14} strokeWidth={1.8} />}
       </IconBtn>
+      <button
+        aria-label="Leave room"
+        onClick={() => {
+          if (!window.confirm("Leave this room?")) return;
+          getSocket().emit("room:leave");
+          console.debug("[solace:FE] leave room stopRtc", {});
+          stopRtc();
+          useRoomStore.getState().reset();
+          router.replace("/");
+        }}
+        className="w-8 h-8 rounded-full grid place-items-center transition-colors"
+        style={{ background: "rgba(26,22,20,0.6)", color: "var(--accent-bone)" }}
+      >
+        <LogOut size={14} strokeWidth={1.8} />
+      </button>
     </div>
   );
 }
 
 export function ControlsCluster({ activePanel, onOpenPanel }: { activePanel: PanelKind | "none"; onOpenPanel: (panel: PanelKind) => void }) {
-  const router = useRouter();
-
   return (
     <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
-        <button
-          aria-label="Leave room"
-          onClick={() => {
-            if (!window.confirm("Leave this room?")) return;
-            getSocket().emit("room:leave");
-            console.debug("[solace:FE] leave room stopRtc", {});
-            stopRtc();
-            useRoomStore.getState().reset();
-            router.replace("/");
-          }}
-          className="glass rounded-full p-1.5 grid place-items-center"
-        >
-          <LogOut size={14} strokeWidth={1.8} style={{ color: "var(--accent-bone)" }} />
-        </button>
         <div className="glass rounded-full p-1.5 flex items-center gap-1.5">
           <IconBtn label="Wallpaper scene" onClick={() => onOpenPanel("wallpaper")} active={activePanel === "wallpaper"}><ImageIcon size={14} strokeWidth={1.8} /></IconBtn>
           <IconBtn label="Theme" onClick={() => onOpenPanel("theme")} active={activePanel === "theme"}><Settings size={14} strokeWidth={1.8} /></IconBtn>

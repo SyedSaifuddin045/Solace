@@ -177,15 +177,15 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
         <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget onOpenPicker={() => setTrackPickerOpen(true)} onOpenQueue={() => setQueueOpen(true)} /></ChromeReveal>
 
-        {/* media controls — bottom center */}
-        <ChromeReveal className="shrink-0">
-          <div
-            className="transition-transform duration-300 ease-out"
-            style={{ transform: activePanel !== "none" ? "translateX(-25rem)" : "translateX(0)" }}
-          >
+        {/* media controls — bottom center, shifts with panel */}
+        <div
+          className="absolute bottom-4 left-0 pointer-events-auto transition-[right] duration-300 ease-out"
+          style={{ right: activePanel !== "none" ? "25rem" : "0" }}
+        >
+          <div className="flex justify-center">
             <MediaControls />
           </div>
-        </ChromeReveal>
+        </div>
 
         <ChromeReveal className="shrink-0 max-w-[60%]">
           <div
@@ -198,12 +198,14 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
         </ChromeReveal>
       </div>
 
-      {/* timer center-top — shifts left with panel like controls + users */}
+      {/* timer center-top — centers in available space when panel opens */}
       <div
-        className="transition-transform duration-300 ease-out"
-        style={{ transform: activePanel !== "none" ? "translateX(-25rem)" : "translateX(0)" }}
+        className="absolute inset-0 pointer-events-none transition-[right] duration-300 ease-out"
+        style={{ right: activePanel !== "none" ? "25rem" : "0" }}
       >
-        <TimerCenter />
+        <div className="relative h-full flex justify-center">
+          <TimerCenter />
+        </div>
       </div>
 
       {/* panels — rendered at top level outside ChromeReveal z-stack */}
