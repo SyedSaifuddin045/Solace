@@ -681,5 +681,28 @@ describe("RoomService", () => {
             const room = service.getRoom(roomId);
             assert.equal(room.state.queue.length, 1);
         });
+
+        test("skipToNext plays queue head and shifts queue", () => {
+            service.setPlayback(roomId, socketId, { status: "playing", track: { url: "https://old.com" }, position: 42 });
+            service.addToQueue(roomId, socketId, { url: "https://next.com" });
+            service.addToQueue(roomId, socketId, { url: "https://later.com" });
+            const { change, queue } = service.skipToNext(roomId, socketId);
+            assert.equal(change.track.url, "https://next.com");
+            assert.equal(change.position, 0);
+            assert.equal(change.status, "playing");
+            assert.deepEqual(queue.map((t) => t.url), ["https://later.com"]);
+        });
+
+        test("skipToNext with empty queue is no-op", () => {
+            service.setPlayback(roomId, socketId, { status: "playing", track: { url: "https://old.com" }, position: 42 });
+            const { change, queue } = service.skipToNext(roomId, socketId);
+            assert.equal(change.track.url, "https://old.com");
+            assert.equal(queue.length, 0);
+        });
+
+        test("skipToNext rejects non-member", () => {
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            assert.throws(() => service.skipToNext(roomId, "outsider"), NotInRoomError);
+        });
     });
 });

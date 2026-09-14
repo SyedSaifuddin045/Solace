@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Play, Pause, Music } from "lucide-react";
+import { Play, Pause, Music, SkipForward } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { formatRemaining } from "@/lib/time";
@@ -95,6 +95,11 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
             >
               <div className="h-full rounded" style={{ width: `${progress}%`, background: "var(--accent-amber)" }} />
             </div>
+            {queue.length > 0 && (
+              <button onClick={() => getSocket().emit("playback:skip")} aria-label="Skip to next" title="Skip to next" className="grid place-items-center w-6 h-6 rounded-full shrink-0" style={{ background: "rgba(224,164,88,0.12)", color: "var(--accent-amber)" }}>
+                <SkipForward size={12} />
+              </button>
+            )}
             <span className="text-[9px] opacity-60 tabular-nums">
               {duration > 0 ? `${formatRemaining(livePos * 1000)}` : "0:00"}
             </span>
@@ -126,6 +131,16 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
             <p className="text-[12px] leading-tight max-w-[180px] truncate">{displayTitle}</p>
             <p className="text-[10px] opacity-50">{duration > 0 ? formatRemaining(livePos * 1000) : ""}</p>
           </div>
+          {queue.length > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); getSocket().emit("playback:skip"); }}
+              aria-label="Skip to next"
+              className="rounded-full w-5 h-5 grid place-items-center shrink-0 transition-colors"
+              style={{ color: "var(--accent-amber)", opacity: 0.6 }}
+            >
+              <SkipForward size={12} />
+            </button>
+          )}
           {queue.length > 0 && onOpenQueue && (
             <button
               onClick={(e) => { e.stopPropagation(); onOpenQueue(); }}

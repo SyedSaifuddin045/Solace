@@ -143,6 +143,19 @@ function createPlaybackHandler(io, roomService) {
             } catch (err) {
                 emitError(socket, err);
             }
+        },
+
+        handleSkip(socket) {
+            const room = assertRoom(socket);
+            if (!room) return;
+            try {
+                const { room: updatedRoom, change, queue } = roomService.skipToNext(room.id, socket.id);
+                broadcast(updatedRoom, change, socket.id);
+                broadcastQueue(updatedRoom, queue);
+                appendActivity(updatedRoom, socket, change.track ? `skipped to ${change.track.url}` : "skip (queue empty)");
+            } catch (err) {
+                emitError(socket, err);
+            }
         }
     };
 }

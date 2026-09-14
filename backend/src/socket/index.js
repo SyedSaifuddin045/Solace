@@ -38,6 +38,7 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
         socket.on(CLIENT.PLAYBACK_QUEUE_ADD, (payload) => playbackHandler.handleQueueAdd(socket, payload));
         socket.on(CLIENT.PLAYBACK_QUEUE_REMOVE, (payload) => playbackHandler.handleQueueRemove(socket, payload));
         socket.on(CLIENT.PLAYBACK_QUEUE_CLEAR, () => playbackHandler.handleQueueClear(socket));
+        socket.on(CLIENT.PLAYBACK_SKIP, () => playbackHandler.handleSkip(socket));
         socket.on(CLIENT.WALLPAPER_SET, (payload) => wallpaperHandler.handleSetWallpaper(socket, payload));
         socket.on(CLIENT.RTC_MEDIA, (payload) => rtcHandler.handleMedia(socket, payload));
         socket.on(CLIENT.RTC_OFFER, (payload) => rtcHandler.handleOffer(socket, payload));

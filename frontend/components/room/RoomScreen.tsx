@@ -84,6 +84,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       ["room:activity", apply("room:activity")],
       ["room:title_state", apply("room:title_state")],
       ["playback:state", apply("playback:state")],
+      ["playback:queue_state", apply("playback:queue_state")],
       ["wallpaper:state", apply("wallpaper:state")],
       ["wallpaper:uploads", apply("wallpaper:uploads")],
       ["timer:state", apply("timer:state")],

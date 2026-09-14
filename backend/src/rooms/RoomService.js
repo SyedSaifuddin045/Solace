@@ -209,6 +209,23 @@ class RoomService {
         return { room, queue: room.state.queue };
     }
 
+    skipToNext(roomId, socketId) {
+        const room = this._assertRoom(roomId);
+        this._assertMember(room, socketId);
+        if (room.state.queue.length === 0) {
+            return { room, change: room.state.playback, queue: room.state.queue };
+        }
+        const [nextTrack] = room.state.queue.splice(0, 1);
+        const change = {
+            status: "playing",
+            track: nextTrack,
+            position: 0,
+            updatedAt: Date.now()
+        };
+        room.state.playback = change;
+        return { room, change, queue: room.state.queue };
+    }
+
     setWallpaper(roomId, socketId, url, kind) {
         const room = this._assertRoom(roomId);
         this._assertMember(room, socketId);

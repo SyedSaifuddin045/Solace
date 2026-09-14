@@ -20,7 +20,8 @@ const CLIENT = {
     RTC_ICE: "rtc:ice",
     PLAYBACK_QUEUE_ADD: "playback:queue_add",
     PLAYBACK_QUEUE_REMOVE: "playback:queue_remove",
-    PLAYBACK_QUEUE_CLEAR: "playback:queue_clear"
+    PLAYBACK_QUEUE_CLEAR: "playback:queue_clear",
+    PLAYBACK_SKIP: "playback:skip"
 };
 
 const SERVER = {
