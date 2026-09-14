@@ -23,10 +23,9 @@ function IconBtn({ label, children, active, tint, onClick }: { label: string; ch
   );
 }
 
-export function ControlsCluster({ activePanel, onOpenPanel }: { activePanel: PanelKind | "none"; onOpenPanel: (panel: PanelKind) => void }) {
+export function MediaControls() {
   const audioOn = useRoomStore((s) => s.audioOnLocal);
   const videoOn = useRoomStore((s) => s.videoOnLocal);
-  const router = useRouter();
 
   const toggleMedia = (kind: "audio" | "video") => {
     const nextAudio = kind === "audio" ? !audioOn : audioOn;
@@ -37,7 +36,6 @@ export function ControlsCluster({ activePanel, onOpenPanel }: { activePanel: Pan
         console.debug("[solace:FE] startRtc resolved", { nextAudio, nextVideo });
       })
       .catch((err) => {
-        // getUserMedia rejected (permission/device) — media stays off
         console.debug("[solace:FE] startRtc rejected", {
           nextAudio,
           nextVideo,
@@ -48,18 +46,26 @@ export function ControlsCluster({ activePanel, onOpenPanel }: { activePanel: Pan
   };
 
   return (
+    <div className="glass rounded-full p-1.5 flex items-center gap-1.5 warm-glow">
+      <IconBtn label="Toggle mic" onClick={() => toggleMedia("audio")} tint={audioOn ? undefined : "var(--status-error)"} active={audioOn}>
+        {audioOn ? <Mic size={14} strokeWidth={1.8} /> : <MicOff size={14} strokeWidth={1.8} />}
+      </IconBtn>
+      <IconBtn label="Toggle camera" onClick={() => toggleMedia("video")} tint={videoOn ? undefined : "var(--status-error)"} active={videoOn}>
+        {videoOn ? <Video size={14} strokeWidth={1.8} /> : <VideoOff size={14} strokeWidth={1.8} />}
+      </IconBtn>
+    </div>
+  );
+}
+
+export function ControlsCluster({ activePanel, onOpenPanel }: { activePanel: PanelKind | "none"; onOpenPanel: (panel: PanelKind) => void }) {
+  const router = useRouter();
+
+  return (
     <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
-        <div className="glass rounded-full p-1.5 flex items-center gap-1.5 warm-glow">
-          <IconBtn label="Toggle mic" onClick={() => toggleMedia("audio")} tint={audioOn ? undefined : "var(--status-error)"} active={audioOn}>
-            {audioOn ? <Mic size={14} strokeWidth={1.8} /> : <MicOff size={14} strokeWidth={1.8} />}
-          </IconBtn>
-          <IconBtn label="Toggle camera" onClick={() => toggleMedia("video")} tint={videoOn ? undefined : "var(--status-error)"} active={videoOn}>
-            {videoOn ? <Video size={14} strokeWidth={1.8} /> : <VideoOff size={14} strokeWidth={1.8} />}
-          </IconBtn>
-        </div>
         <button
           aria-label="Leave room"
           onClick={() => {
+            if (!window.confirm("Leave this room?")) return;
             getSocket().emit("room:leave");
             console.debug("[solace:FE] leave room stopRtc", {});
             stopRtc();

@@ -5,7 +5,7 @@ import { ChromeReveal } from "@/components/room/ChromeReveal";
 import { TitleChip } from "@/components/room/TitleChip";
 import { SongWidget } from "@/components/room/SongWidget";
 import { UsersStack } from "@/components/room/UsersStack";
-import { ControlsCluster, type PanelKind } from "@/components/room/ControlsCluster";
+import { ControlsCluster, MediaControls, type PanelKind } from "@/components/room/ControlsCluster";
 import { ChatPanel } from "@/components/panels/ChatPanel";
 import { InfoPanel } from "@/components/panels/InfoPanel";
 import { ThemePanel } from "@/components/panels/ThemePanel";
@@ -176,6 +176,17 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       {/* bottom controls — single render, shift left when panel opens */}
       <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
         <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget onOpenPicker={() => setTrackPickerOpen(true)} onOpenQueue={() => setQueueOpen(true)} /></ChromeReveal>
+
+        {/* media controls — bottom center */}
+        <ChromeReveal className="shrink-0">
+          <div
+            className="transition-transform duration-300 ease-out"
+            style={{ transform: activePanel !== "none" ? "translateX(-25rem)" : "translateX(0)" }}
+          >
+            <MediaControls />
+          </div>
+        </ChromeReveal>
+
         <ChromeReveal className="shrink-0 max-w-[60%]">
           <div
             className="flex flex-col items-end gap-1.5 transition-transform duration-300 ease-out hidden sm:flex"

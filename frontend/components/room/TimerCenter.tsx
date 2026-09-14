@@ -70,12 +70,12 @@ export function TimerCenter() {
     }
   }, [hintVisible, running, idle, minimized, timer.status]);
 
-  // Auto-expand when timer pauses or completes while minimized
+  // Auto-expand when timer completes while minimized (not on pause)
   useEffect(() => {
-    if (minimized && timer.status !== "running") {
+    if (minimized && timer.status === "idle" && timer.remainingMs === 0 && timer.durationMs > 0) {
       setMinimized(false);
     }
-  }, [minimized, timer.status]);
+  }, [minimized, timer.status, timer.remainingMs, timer.durationMs]);
 
   if (!mounted) {
     return (
