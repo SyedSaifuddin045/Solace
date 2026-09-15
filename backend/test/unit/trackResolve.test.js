@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { detectProvider, extractYouTubeId, cacheClear } = require("../../src/track/resolve");
+const { detectProvider, extractYouTubeId, cacheClear, resolveYouTube, resolveTrack } = require("../../src/track/resolve");
 
 describe("detectProvider", () => {
     it("detects standard youtube.com/watch URLs", () => {
@@ -71,5 +71,66 @@ describe("cache", () => {
     it("cacheClear resets the cache", () => {
         cacheClear();
         assert.ok(true);
+    });
+});
+
+const STREAM_URL = "https://rrx---googlevideo.example/stream.m4a";
+
+function fakeExecSuccess() {
+    return Promise.resolve({ stdout: STREAM_URL + "\n", stderr: "" });
+}
+function fakeExecFailure() {
+    const err = new Error("spawn yt-dlp ENOENT");
+    err.code = "ENOENT";
+    return Promise.reject(err);
+}
+
+describe("resolveYouTube", () => {
+    it("returns audioUrl when yt-dlp extraction succeeds", async () => {
+        cacheClear();
+        const result = await resolveYouTube("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { execFileAsync: fakeExecSuccess });
+        assert.equal(result.provider, "youtube");
+        assert.equal(result.url, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        assert.equal(result.audioUrl, STREAM_URL);
+        assert.ok(result.title);
+    });
+
+    it("throws when yt-dlp fails instead of returning a stream-less track", async () => {
+        cacheClear();
+        await assert.rejects(
+            resolveYouTube("https://youtu.be/dQw4w9WgXcQ", { execFileAsync: fakeExecFailure }),
+            (err) => err.message === "NO_AUDIO_STREAM"
+        );
+    });
+
+    it("does not cache failed extractions (succeeds after transient failure)", async () => {
+        cacheClear();
+        await assert.rejects(resolveYouTube("https://youtu.be/dQw4w9WgXcQ", { execFileAsync: fakeExecFailure }));
+        // second attempt with working yt-dlp must still extract (no poisoned cache)
+        const result = await resolveYouTube("https://youtu.be/dQw4w9WgXcQ", { execFileAsync: fakeExecSuccess });
+        assert.equal(result.audioUrl, STREAM_URL);
+    });
+});
+
+describe("resolveTrack playability contract", () => {
+    it("throws for SoundCloud — no playable stream is ever returned", async () => {
+        cacheClear();
+        await assert.rejects(
+            resolveTrack("https://soundcloud.com/artist/track-name"),
+            (err) => err.code === "SOUNDCLOUD_STREAM_UNSUPPORTED"
+        );
+    });
+
+    it("throws for unknown provider — no playable stream", async () => {
+        await assert.rejects(
+            resolveTrack("https://example.com/file.mp3"),
+            (err) => err.code === "UNSUPPORTED_PROVIDER"
+        );
+    });
+
+    it("passes exec injection through for youtube", async () => {
+        cacheClear();
+        const result = await resolveTrack("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { execFileAsync: fakeExecSuccess });
+        assert.equal(result.audioUrl, STREAM_URL);
     });
 });

@@ -104,6 +104,32 @@ describe("track router security", () => {
         assert.equal((await res.json()).error, "MISSING_URL");
     });
 
+    test("resolve soundcloud → 422 (no playable stream ever — must not pretend)", async () => {
+        const { port } = await boot();
+        const res = await fetch(`http://127.0.0.1:${port}/track/resolve`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: "https://soundcloud.com/artist/track-name" })
+        });
+        assert.equal(res.status, 422);
+        const body = await res.json();
+        assert.equal(body.error, "RESOLVE_FAILED");
+        assert.match(body.message, /SoundCloud/);
+    });
+
+    test("resolve unknown provider → 422 (would be dead audio otherwise)", async () => {
+        const { port } = await boot();
+        const res = await fetch(`http://127.0.0.1:${port}/track/resolve`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: "https://example.com/song.mp3" })
+        });
+        assert.equal(res.status, 422);
+        const body = await res.json();
+        assert.equal(body.error, "RESOLVE_FAILED");
+        assert.match(body.message, /YouTube/);
+    });
+
     test("options preflight to proxy pins allowed origin", async () => {
         const { port } = await boot();
         const res = await fetch(`http://127.0.0.1:${port}/track/proxy`, {

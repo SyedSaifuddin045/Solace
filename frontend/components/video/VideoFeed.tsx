@@ -6,17 +6,35 @@ import { useRoomStore } from "@/lib/store";
 function RemoteStream({ stream }: { stream: MediaStream }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hasVideo = stream.getVideoTracks().length > 0;
+  const [videoActive, setVideoActive] = useState(() =>
+    stream.getVideoTracks().some((t) => t.readyState === "live" && !t.muted)
+  );
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.srcObject = stream;
     if (videoRef.current) videoRef.current.srcObject = stream;
-  }, [stream, hasVideo]);
+    const videoTracks = stream.getVideoTracks();
+    const update = () =>
+      setVideoActive(videoTracks.some((t) => t.readyState === "live" && !t.muted));
+    videoTracks.forEach((t) => {
+      t.addEventListener("mute", update);
+      t.addEventListener("unmute", update);
+      t.addEventListener("ended", update);
+    });
+    update();
+    return () => {
+      videoTracks.forEach((t) => {
+        t.removeEventListener("mute", update);
+        t.removeEventListener("unmute", update);
+        t.removeEventListener("ended", update);
+      });
+    };
+  }, [stream]);
 
   return (
     <>
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
-      {hasVideo ? (
+      {videoActive ? (
         <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
       ) : (
         <div className="w-full h-full grid place-items-center text-[8px] opacity-60">audio only</div>

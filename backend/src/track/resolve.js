@@ -3,7 +3,7 @@ const http = require("node:http");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 
-const execFileAsync = promisify(execFile);
+const execFileAsyncReal = promisify(execFile);
 
 const YOUTUBE_PATTERNS = [
     /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
@@ -104,7 +104,7 @@ function postJSON(url, body, headers = {}) {
     });
 }
 
-async function resolveYouTube(url) {
+async function resolveYouTube(url, opts = {}) {
     const videoId = extractYouTubeId(url);
     if (!videoId) throw new Error("INVALID_YOUTUBE_URL");
 
@@ -113,7 +113,7 @@ async function resolveYouTube(url) {
     const cached = cacheGet(cacheKey);
     if (cached) return { ...cached, url: canonical };
 
-    // Get metadata from oEmbed
+    // Get metadata from oEmbed — best effort, never fatal
     let title = null;
     let artist = null;
     try {
@@ -124,7 +124,10 @@ async function resolveYouTube(url) {
         // ignore — metadata is optional
     }
 
-    // Get audio stream URL via yt-dlp
+    // Get audio stream URL via yt-dlp. A track without a playable stream is a
+    // silent failure on every client (no play, no progress, no seek) — so a
+    // failed extraction MUST reject, never resolve with audioUrl null.
+    const execFileAsync = opts.execFileAsync || execFileAsyncReal;
     let audioUrl = null;
     try {
         const { stdout } = await execFileAsync("yt-dlp", [
@@ -135,6 +138,11 @@ async function resolveYouTube(url) {
         audioUrl = stdout.trim() || null;
     } catch (err) {
         console.log("[solace:BE] yt-dlp failed", { videoId, error: err.message });
+    }
+    if (!audioUrl) {
+        const err = new Error("NO_AUDIO_STREAM");
+        err.code = "NO_AUDIO_STREAM";
+        throw err;
     }
 
     const result = {
@@ -151,27 +159,13 @@ async function resolveYouTube(url) {
 }
 
 async function resolveSoundCloud(url) {
-    const canonical = url.startsWith("http") ? url : `https://${url}`;
-    const cacheKey = `soundcloud:${canonical}`;
-    const cached = cacheGet(cacheKey);
-    if (cached) return { ...cached, url: canonical };
-
-    try {
-        const data = await fetchJSON(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(canonical)}`);
-        const result = {
-            url: canonical,
-            title: data.title || null,
-            artist: data.author_name || null,
-            artwork: data.thumbnail_url || null,
-            duration: null,
-            provider: "soundcloud",
-        };
-        cacheSet(cacheKey, result);
-        return result;
-    } catch (err) {
-        console.log("[solace:BE] resolveSoundCloud oEmbed failed", { url: canonical, error: err.message });
-        throw err;
-    }
+    // SoundCloud streams require an authenticated client_id dance and are
+    // frequently blocked from datacenter IPs. Returning metadata without a
+    // stream URL produces silent dead playback on every client — so reject
+    // loudly instead of pretending the track is playable.
+    const err = new Error("SOUNDCLOUD_STREAM_UNSUPPORTED");
+    err.code = "SOUNDCLOUD_STREAM_UNSUPPORTED";
+    throw err;
 }
 
 function cacheGet(key) {
@@ -196,11 +190,17 @@ function cacheClear() {
     cache.clear();
 }
 
-async function resolveTrack(url) {
+async function resolveTrack(url, opts = {}) {
     const provider = detectProvider(url);
-    if (provider === "youtube") return resolveYouTube(url);
+    if (provider === "youtube") return resolveYouTube(url, opts);
     if (provider === "soundcloud") return resolveSoundCloud(url);
-    return { url, title: null, artist: null, artwork: null, duration: null, provider: "unknown" };
+    if (provider === "unknown") {
+        // The proxy only relays googlevideo URLs; a bare audio URL can never
+        // play through it. Fail loudly rather than shipping a dead track.
+        const err = new Error("UNSUPPORTED_PROVIDER");
+        err.code = "UNSUPPORTED_PROVIDER";
+        throw err;
+    }
 }
 
 module.exports = {

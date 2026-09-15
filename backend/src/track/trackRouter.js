@@ -61,8 +61,13 @@ function createTrackRouter(roomService) {
             console.log("[solace:BE] track resolved", { provider: result.provider, title: result.title });
             res.json(result);
         } catch (err) {
-            console.log("[solace:BE] track resolve FAILED", { url: url.slice(0, 120), error: err.message });
-            res.status(422).json({ error: "RESOLVE_FAILED", message: "Couldn't resolve track metadata" });
+            console.log("[solace:BE] track resolve FAILED", { url: url.slice(0, 120), error: err.message, code: err.code });
+            const messages = {
+                NO_AUDIO_STREAM: "Couldn't fetch a playable stream for this track (YouTube may have blocked it here). Try another song.",
+                SOUNDCLOUD_STREAM_UNSUPPORTED: "SoundCloud playback isn't available yet — paste a YouTube link instead.",
+                UNSUPPORTED_PROVIDER: "Only YouTube links can be played right now.",
+            };
+            res.status(422).json({ error: "RESOLVE_FAILED", message: messages[err.code] || "Couldn't resolve track metadata" });
         }
     });
 
