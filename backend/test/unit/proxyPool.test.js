@@ -41,12 +41,29 @@ describe("refreshProxyPool (webshare API)", () => {
                 { username: "u3", password: "p3", proxy_address: "9.9.9.9", port: 1080, valid: true },
             ],
         };
-        await refreshProxyPool({ apiKey: "test-key", force: true, httpGet: fakeHttpGet(body) });
+        const calls = [];
+        await refreshProxyPool({
+            apiKey: "test-key",
+            force: true,
+            httpGet: (url, headers) => { calls.push({ url, headers }); return Promise.resolve(body); },
+        });
         const pool = getProxyPool();
         assert.deepEqual(pool, [
             "http://u1:p1@1.2.3.4:80",
             "http://u3:p3@9.9.9.9:1080",
         ]);
+    });
+
+    it("calls the documented Webshare endpoint with Token auth", async () => {
+        const calls = [];
+        await refreshProxyPool({
+            apiKey: "sekrit",
+            force: true,
+            httpGet: (url, headers) => { calls.push({ url, headers }); return Promise.resolve({ results: [] }); },
+        });
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].url, "https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page_size=100");
+        assert.equal(calls[0].headers.Authorization, "Token sekrit");
     });
 
     it("keeps existing pool when API fails", async () => {

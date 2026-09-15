@@ -1,13 +1,14 @@
 // Runtime proxy pool for yt-dlp extraction.
 //
 // Prefers proxies fetched live from Webshare's API (PROXY_API_KEY env,
-// https://api.webshare.io/api/v2/proxy/list) so dead/rotating exits are
-// self-healing without redeploys. Falls back to the static YT_DLP_PROXY env
-// list, then to no proxy at all (direct extraction, dev/local).
+// https://proxy.webshare.io/api/v2/proxy/list — see https://apidocs.webshare.io/)
+// so dead/rotating exits are self-healing without redeploys. Falls back to the
+// static YT_DLP_PROXY env list, then to no proxy at all (direct extraction,
+// dev/local).
 
 const https = require("node:https");
 
-const WEBSHARE_API = "https://api.webshare.io/api/v2/proxy/list/";
+const WEBSHARE_API = "https://proxy.webshare.io/api/v2/proxy/list/";
 
 function normalizeProxy(entry) {
     if (/^[a-z0-9]+:\/\//i.test(entry)) return entry;
@@ -37,8 +38,10 @@ function getApiKey() {
 }
 
 function webshareFetch(apiKey, httpGet = httpsGet) {
-    return httpGet(`${WEBSHARE_API}?page_size=100`, {
-        Authorization: `Bearer ${apiKey}`,
+    // mode is required. Datacenter/static pools use `direct`; `backbone` is
+    // only for residential pools (see https://apidocs.webshare.io/proxy-list/list).
+    return httpGet(`${WEBSHARE_API}?mode=direct&page_size=100`, {
+        Authorization: `Token ${apiKey}`,
         "User-Agent": "solace-backend",
     });
 }
