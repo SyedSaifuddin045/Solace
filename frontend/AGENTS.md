@@ -36,6 +36,7 @@ CORS: server reads `CLIENT_ORIGIN` env (default `http://localhost:3000`). Port f
 | `room:join` | `{ roomId, displayName, password? }` — password required when room is protected |
 | `room:leave` | _(none)_ |
 | `room:get_state` | _(none)_ |
+| `room:check` | `{ roomId }` — check if room exists and is password-protected |
 | `room:set_title` | `{ title }` |
 | `activity:send` | `{ text }` |
 | `playback:play` | `{ track? }` — track is `{ url }` or null |
@@ -60,6 +61,7 @@ CORS: server reads `CLIENT_ORIGIN` env (default `http://localhost:3000`). Port f
 | `room:member_joined` | `{ member }` |
 | `room:member_left` | `{ socketId }` |
 | `room:error` | `{ code, message }` |
+| `room:check_result` | `{ roomId, protected }` — response to `room:check` |
 | `room:title_state` | `{ title, changedBy, updatedAt }` |
 | `room:activity` | `{ entry }` |
 | `playback:state` | `{ status, track, position, updatedAt, changedBy }` |

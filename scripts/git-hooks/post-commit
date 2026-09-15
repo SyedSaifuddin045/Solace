@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Refresh codebase-memory-mcp knowledge graph after every commit.
+# Incremental (~100ms), non-blocking, silent. No-op if indexer missing or in CI.
+set -u
+
+MCP_BIN="${CODEBASE_MEMORY_MCP_BIN:-/Users/saif/.local/bin/codebase-memory-mcp}"
+REPO="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+
+[ -x "$MCP_BIN" ] || exit 0
+[ -n "${CI:-}" ] && exit 0
+
+"$MCP_BIN" cli index_repository "{\"repo_path\":\"$REPO\",\"mode\":\"full\",\"persistence\":true}" >/dev/null 2>&1 || true

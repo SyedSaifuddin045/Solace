@@ -2,3 +2,6 @@
 .lavish/
 docs/
 backend/uploads/
+.env
+# Playwright MCP captures (throwaway debug output)
+.playwright-mcp/
