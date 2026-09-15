@@ -6,7 +6,7 @@ import { AvatarPicker } from "@/components/join/AvatarPicker";
 import { loadPrefs, savePrefs, touchRecentRoom } from "@/lib/prefs";
 import { getSocket } from "@/lib/socket";
 import { useRoomStore } from "@/lib/store";
-import { readRoomPassword, writeRoomPassword } from "@/lib/password";
+import { writeRoomPassword } from "@/lib/password";
 import type { Member, RoomState } from "@/lib/store";
 import { userMessage } from "@/lib/errors";
 
@@ -14,14 +14,16 @@ import { userMessage } from "@/lib/errors";
 const normalizeCode = (raw: string) =>
   raw.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 6);
 
+type Mode = "join" | "create";
+
 export function JoinScreen() {
   const router = useRouter();
+  const [mode, setMode] = useState<Mode>("join");
   const [name, setName] = useState(() => loadPrefs().name);
   const [avatar, setAvatar] = useState<string | null>(() => loadPrefs().avatar);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
-  const [roomProtected, setRoomProtected] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [passwordRequired, setPasswordRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"join" | "create" | null>(null);
   const [recentRooms, setRecentRooms] = useState<string[]>([]);
@@ -44,19 +46,29 @@ export function JoinScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, avatar]);
 
+  // Pre-check only matters while joining: reveal the password field the
+  // moment the code resolves to a protected room. Create never needs it.
+  // (passwordRequired only ever flips inside socket event handlers — never
+  // synchronously in the effect body per react-hooks/set-state-in-effect.)
   useEffect(() => {
-    if (code.trim().length !== 6) { setRoomProtected(false); return; }
-    setCreating(false);
+    if (mode !== "join" || code.trim().length !== 6) return;
     const socket = getSocket();
     const onResult = (p?: { roomId: string; protected: boolean }) => {
-      if (p && p.roomId === code) setRoomProtected(!!p.protected);
+      if (p && p.roomId === code) setPasswordRequired(!!p.protected);
     };
-    const onErr = () => { setRoomProtected(false); };
+    const onErr = () => { setPasswordRequired(false); };
     socket.on("room:check_result", onResult);
     socket.on("room:error", onErr);
     socket.emit("room:check", { roomId: code });
     return () => { socket.off("room:check_result", onResult); socket.off("room:error", onErr); };
-  }, [code]);
+  }, [mode, code]);
+
+  const switchMode = (m: Mode) => {
+    if (busy) return;
+    setMode(m);
+    setError(null);
+    setPasswordRequired(false);
+  };
 
   const routeToRoom = (roomId: string) => {
     touchRecentRoom(roomId);
@@ -94,7 +106,7 @@ export function JoinScreen() {
       socket.off("room:error", onError as never);
       setBusy(null);
       console.debug("[solace:FE] join room:error received", { code: p?.code, message: p?.message });
-      if (p?.code === "ROOM_PASSWORD_REQUIRED") setRoomProtected(true);
+      if (p?.code === "ROOM_PASSWORD_REQUIRED" || p?.code === "WRONG_PASSWORD") setPasswordRequired(true);
       setError(userMessage(p?.code ?? "", p?.message ?? ""));
       useRoomStore.getState().clearError();
     };
@@ -106,7 +118,6 @@ export function JoinScreen() {
 
   const doCreate = () => {
     if (busy) return;
-    if (!creating) { setCreating(true); setError(null); return; }
     console.debug("[solace:FE] doCreate", { busy, name });
     commitPrefs();
     setBusy("create");
@@ -143,6 +154,29 @@ export function JoinScreen() {
         <h1 className="text-[15px] mb-1 tracking-wide">solace</h1>
         <p className="text-[11px] mb-5 opacity-60">a quiet room for the same evening</p>
 
+        <div className="flex gap-1 justify-center mb-5">
+          <button
+            onClick={() => switchMode("join")}
+            disabled={busy !== null}
+            className="rounded-full px-4 py-1.5 text-[11px] transition-colors"
+            style={mode === "join"
+              ? { background: "var(--accent-amber)", color: "#14110F" }
+              : { opacity: 0.55 }}
+          >
+            join a room
+          </button>
+          <button
+            onClick={() => switchMode("create")}
+            disabled={busy !== null}
+            className="rounded-full px-4 py-1.5 text-[11px] transition-colors"
+            style={mode === "create"
+              ? { background: "var(--accent-amber)", color: "#14110F" }
+              : { opacity: 0.55 }}
+          >
+            create a room
+          </button>
+        </div>
+
         <div className="flex justify-center">
           <AvatarPicker value={avatar} onChange={setAvatar} />
         </div>
@@ -159,28 +193,53 @@ export function JoinScreen() {
           />
         </div>
 
-        <div className="mt-3 text-left">
-          <label className="text-[10px] opacity-50 uppercase tracking-widest">room code</label>
-          <input
-            value={code}
-            onChange={(e) => setCode(normalizeCode(e.target.value))}
-            placeholder="ABC123"
-            className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none tracking-widest"
-            style={{ background: "rgba(20,17,15,0.4)" }}
-          />
-        </div>
+        {mode === "join" && (
+          <>
+            <div className="mt-3 text-left">
+              <label className="text-[10px] opacity-50 uppercase tracking-widest">room code</label>
+              <input
+                value={code}
+                onChange={(e) => {
+                  const next = normalizeCode(e.target.value);
+                  setCode(next);
+                  if (next.length !== 6) setPasswordRequired(false);
+                }}
+                placeholder="ABC123"
+                className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none tracking-widest"
+                style={{ background: "rgba(20,17,15,0.4)" }}
+              />
+            </div>
 
-        {(roomProtected || creating) && (
+            {passwordRequired && (
+              <div className="mt-3 text-left">
+                <label className="text-[10px] opacity-50 uppercase tracking-widest flex items-center gap-1">
+                  <Lock size={9} /> password
+                  <span style={{ color: "var(--accent-amber)" }}>— required</span>
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="required · 4–32 chars"
+                  className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none"
+                  style={{ background: "rgba(20,17,15,0.4)" }}
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        {mode === "create" && (
           <div className="mt-3 text-left">
             <label className="text-[10px] opacity-50 uppercase tracking-widest flex items-center gap-1">
               <Lock size={9} /> password
-              {creating && <span style={{ color: "var(--accent-amber)" }}>— optional, protects your room</span>}
+              <span style={{ color: "var(--accent-amber)" }}>— optional, protects your room</span>
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={creating ? "optional · 4–32 chars" : "required · 4–32 chars"}
+              placeholder="optional · 4–32 chars"
               className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none"
               style={{ background: "rgba(20,17,15,0.4)" }}
             />
@@ -192,24 +251,28 @@ export function JoinScreen() {
         )}
 
         <div className="flex gap-2 justify-center mt-4">
-          <button
-            onClick={doJoin}
-            disabled={busy !== null}
-            className="rounded-full px-5 py-2 text-[12px] flex items-center gap-1.5 disabled:opacity-50"
-            style={{ background: "var(--accent-amber)", color: "#14110F" }}
-          >
-            <ArrowRight size={12} /> {busy === "join" ? "joining…" : "Join"}
-          </button>
-          <button
-            onClick={doCreate}
-            disabled={busy !== null}
-            className="hairline rounded-full px-5 py-2 text-[12px] flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <Plus size={12} /> {busy === "create" ? "creating…" : creating ? "Set password & create" : "Create room"}
-          </button>
+          {mode === "join" ? (
+            <button
+              onClick={doJoin}
+              disabled={busy !== null}
+              className="rounded-full px-5 py-2 text-[12px] flex items-center gap-1.5 disabled:opacity-50"
+              style={{ background: "var(--accent-amber)", color: "#14110F" }}
+            >
+              <ArrowRight size={12} /> {busy === "join" ? "joining…" : "Join"}
+            </button>
+          ) : (
+            <button
+              onClick={doCreate}
+              disabled={busy !== null}
+              className="rounded-full px-5 py-2 text-[12px] flex items-center gap-1.5 disabled:opacity-50"
+              style={{ background: "var(--accent-amber)", color: "#14110F" }}
+            >
+              <Plus size={12} /> {busy === "create" ? "creating…" : "Create room"}
+            </button>
+          )}
         </div>
 
-        {recentRooms.length > 0 && (
+        {mode === "join" && recentRooms.length > 0 && (
           <div className="mt-5">
             <p className="text-[9px] opacity-40 uppercase tracking-widest mb-1.5">recent rooms</p>
             <div className="flex gap-1.5 justify-center flex-wrap">
