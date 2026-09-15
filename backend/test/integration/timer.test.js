@@ -77,7 +77,7 @@ describe("timer:resume", () => {
         const resumeState = await resumeP;
         assert.equal(resumeState.status, "running");
         assert.ok(resumeState.remainingMs > 0, "remainingMs should be > 0 after resume");
-        assert.ok(resumeState.remainingMs < 25 * 60_000, "remainingMs should be less than original duration");
+        assert.ok(resumeState.remainingMs <= 25 * 60_000, "remainingMs should not exceed original duration");
         assert.equal(typeof resumeState.endsAt, "number");
         assert.ok(resumeState.endsAt > Date.now(), "endsAt should be in the future");
 

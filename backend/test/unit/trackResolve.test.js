@@ -106,6 +106,12 @@ describe("buildYtDlpArgs", () => {
         const args = buildYtDlpArgs(canonical, {});
         assert.ok(!args.includes("--cookies"));
     });
+
+    it("adds --proxy when a residential proxy is configured", () => {
+        const args = buildYtDlpArgs(canonical, { proxy: "socks5://u:p@127.0.0.1:1080" });
+        assert.ok(args.includes("--proxy"));
+        assert.ok(args.includes("socks5://u:p@127.0.0.1:1080"));
+    });
 });
 
 describe("resolveYouTube", () => {

@@ -106,9 +106,10 @@ function postJSON(url, body, headers = {}) {
 }
 
 // YouTube now requires a JS runtime (PoT challenge) for many videos, and bot
-// checks datacenter IPs hard. node is baked into the image; a cookies file
-// (Cookies.txt LOCALLY export, mounted at backend/cookies.txt or YT_COOKIES_FILE)
-// opts around the "Sign in to confirm you're not a bot" wall entirely.
+// checks datacenter IPs hard. node is baked into the image; a residential
+// proxy (YT_DLP_PROXY, e.g. socks5://user:pass@host:port — YouTube can't bot-
+// wall residential exits) and/or a cookies file (Cookies.txt LOCALLY export,
+// backend/cookies.txt or YT_COOKIES_FILE) opt around the wall entirely.
 function buildYtDlpArgs(canonical, opts = {}) {
     const args = [
         "-f", "bestaudio[ext=m4a]/bestaudio",
@@ -116,6 +117,10 @@ function buildYtDlpArgs(canonical, opts = {}) {
         "--js-runtimes", "node",
         canonical,
     ];
+    const proxy = opts.proxy || process.env.YT_DLP_PROXY;
+    if (proxy) {
+        args.splice(args.length - 1, 0, "--proxy", proxy);
+    }
     const cookiesPath =
         opts.cookiesFile || process.env.YT_COOKIES_FILE || (fs.existsSync("cookies.txt") ? "cookies.txt" : null);
     if (cookiesPath) {
