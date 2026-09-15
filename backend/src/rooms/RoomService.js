@@ -211,8 +211,17 @@ class RoomService {
 
     leaveRoom(roomId, socketId) {
         const room = this._assertRoom(roomId);
+        const leaving = room.members.get(socketId);
         this._assertMember(room, socketId);
         room.removeMember(socketId);
+        // Transfer host to the first remaining member when the host leaves,
+        // so the room never becomes hostless (title/scene edits need a host).
+        // Insertion order keeps the promoted member at members[0] in snapshots.
+        if (leaving.isHost && room.members.size > 0) {
+            const [nextId] = room.members.entries().next().value;
+            const nextMember = room.members.get(nextId);
+            nextMember.isHost = true;
+        }
         // Reclaim empty rooms: if the last member leaves, drop the room.
         // This prevents unbounded in-memory room growth.
         if (room.members.size === 0 && typeof this.store.remove === "function") {

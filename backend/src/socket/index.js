@@ -20,16 +20,15 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
     });
 
     // Per-socket, per-event-window throttle: prevents event flood amplification
-    // into room broadcasts.
+    // into room broadcasts. Relay events (rtc:offer/answer/ice) are 1:1 fan-out,
+    // not room broadcasts, so they stay under the general cap only — a WebRTC
+    // call setup naturally bursts many ICE candidates in <10s.
     const EVENT_LIMIT = 60;             // max events per window
     const EVENT_WINDOW_MS = 10_000;     // window length
-    const SENSITIVE_EVENT_LIMIT = 10;   // stricter cap for join/create/rtc relays
+    const SENSITIVE_EVENT_LIMIT = 10;   // stricter cap for room-mutating broadcasts
     const SENSITIVE_EVENTS = new Set([
         CLIENT.ROOM_CREATE,
         CLIENT.ROOM_JOIN,
-        CLIENT.RTC_OFFER,
-        CLIENT.RTC_ANSWER,
-        CLIENT.RTC_ICE,
         CLIENT.PLAYBACK_SET_TRACK,
         CLIENT.WALLPAPER_SET
     ]);
@@ -125,10 +124,16 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
             if (!room) return;
             const member = room.members.get(socket.id);
             const displayName = member ? member.displayName : "unknown";
+            const isLastMember = room.members.size === 1;
+            if (!isLastMember) {
+                // Notify remaining members BEFORE leaveRoom: when the last member
+                // leaves, leaveRoom reclaims the room and any later room access
+                // throws RoomNotFoundError.
+                const { entry } = roomService.appendActivity(room.id, { type: "system", actor: { socketId: socket.id, displayName }, detail: "left" });
+                socket.to(room.id).emit(SERVER.ROOM_MEMBER_LEFT, { socketId: socket.id });
+                socket.to(room.id).emit(SERVER.ROOM_ACTIVITY, { entry });
+            }
             roomService.leaveRoom(room.id, socket.id);
-            const { entry } = roomService.appendActivity(room.id, { type: "system", actor: { socketId: socket.id, displayName }, detail: "left" });
-            socket.to(room.id).emit(SERVER.ROOM_MEMBER_LEFT, { socketId: socket.id });
-            socket.to(room.id).emit(SERVER.ROOM_ACTIVITY, { entry });
         });
     });
 

@@ -11,6 +11,10 @@ const { createTrackRouter } = require("./track/trackRouter");
 
 function createHttpServer() {
     const app = express();
+    // Behind the traefik/Cloudflare chain, socket.io sees X-Forwarded-For and
+    // express-rate-limit needs trust proxy to avoid ValidationError spam and
+    // mis-identifying users (one hop: traefik).
+    app.set("trust proxy", 1);
     const roomService = new RoomService(MemoryRoomStore);
 
     // Security headers (CSP relaxed for inline theme script; X-Frame denied; nosniff)

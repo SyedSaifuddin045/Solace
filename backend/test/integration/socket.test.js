@@ -603,3 +603,65 @@ describe("wallpaper kind + upload library wire", () => {
         assert.equal(act.entry.detail, "set video wallpaper http://smoke/live.webm");
     });
 });
+
+describe("rate limiter + host lifecycle (production bug regressions)", () => {
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    test("RTC relay burst during call setup does NOT disconnect the sender", async () => {
+        const { port } = await boot();
+        const { client: host, roomId } = await createRoom(port, "Host");
+        await joinRoom(port, roomId, "Guest");
+
+        // Full media-connect burst inside a single 10s window:
+        // 2 media toggles + 1 offer + 1 answer + 15 trickled ICE candidates.
+        host.emit("rtc:media", { audio: true, video: false });
+        host.emit("rtc:media", { audio: true, video: true });
+        host.emit("rtc:offer", { to: "ghost", sdp: "v=0 smoke-offer" });
+        host.emit("rtc:answer", { to: "ghost", sdp: "v=0 smoke-answer" });
+        for (let i = 0; i < 15; i++) {
+            host.emit("rtc:ice", {
+                to: "ghost",
+                candidate: { candidate: `candidate:${i} 1 udp 2122260223 10.0.0.${i} 5000 typ host`, sdpMid: "0", sdpMLineIndex: 0 }
+            });
+        }
+
+        await wait(300);
+        assert.equal(host.connected, true, "sender must NOT be rate-limited during RTC setup");
+    });
+
+    test("host disconnect promotes first remaining member to host", async () => {
+        const { port } = await boot();
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const { client: guest } = await joinRoom(port, roomId, "Guest");
+
+        await closeSocket(host);
+        await wait(100);
+
+        const stateP = waitForEvent(guest, "room:joined", (p) => p.roomId === roomId);
+        guest.emit("room:get_state");
+        const st = await stateP;
+        const promoted = st.members.find((m) => m.socketId === guest.id);
+        assert.equal(promoted.isHost, true, "first remaining member must become host");
+
+        const titleP = waitForEvent(guest, "room:title_state", (p) => p.title === "renamed after host left");
+        guest.emit("room:set_title", { title: "renamed after host left" });
+        const t = await titleP;
+        assert.equal(t.title, "renamed after host left");
+    });
+
+    test("sensitive event flood (room:create spam) still rate-limited", async () => {
+        const { port } = await boot();
+        const target = track(await connectClient(port));
+        for (let i = 0; i < 12; i++) target.emit("room:create", { displayName: "flooder" });
+        await wait(200);
+        assert.equal(target.connected, false, "sensitive flood must still disconnect");
+    });
+
+    test("general event flood (activity:send spam) still rate-limited", async () => {
+        const { port } = await boot();
+        const target = track(await connectClient(port));
+        for (let i = 0; i < 65; i++) target.emit("activity:send", { text: "spam" });
+        await wait(200);
+        assert.equal(target.connected, false, "general flood must still disconnect");
+    });
+});
