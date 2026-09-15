@@ -26,7 +26,7 @@ import { initRtc, startSpeakingDetection, stopRtc } from "@/lib/rtc";
 import { resolveAssetUrl } from "@/lib/upload";
 import { isGradientUrl, gradientCss } from "@/lib/wallpaper";
 import { useAutoAdvance } from "@/hooks/useAutoAdvance";
-import { AudioPlayer } from "@/components/room/VideoPlayer";
+import { TrackPlayback } from "@/components/room/VideoPlayer";
 
 export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const params = useParams<{ roomId: string }>();
@@ -251,8 +251,8 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       {/* setup overlay */}
       {setupVisible && <RoomSetupOverlay onEnter={handleSetupEnter} />}
 
-      {/* hidden audio player (YouTube) */}
-      <AudioPlayer />
+      {/* hidden playback engine (proxied audio or YouTube embed fallback) */}
+      <TrackPlayback />
     </main>
   );
 }

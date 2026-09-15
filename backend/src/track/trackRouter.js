@@ -67,7 +67,17 @@ function createTrackRouter(roomService) {
                 SOUNDCLOUD_STREAM_UNSUPPORTED: "SoundCloud playback isn't available yet — paste a YouTube link instead.",
                 UNSUPPORTED_PROVIDER: "Only YouTube links can be played right now.",
             };
-            res.status(422).json({ error: "RESOLVE_FAILED", message: messages[err.code] || "Couldn't resolve track metadata" });
+            res.status(422).json({
+                error: "RESOLVE_FAILED",
+                message: messages[err.code] || "Couldn't resolve track metadata",
+                playable: false,
+                embeddable: err.embeddable === true,
+                metadata: {
+                    title: err.title || null,
+                    artist: err.artist || null,
+                    artwork: err.artwork || null,
+                },
+            });
         }
     });
 

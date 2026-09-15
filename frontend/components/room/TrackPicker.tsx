@@ -3,7 +3,8 @@ import { useState } from "react";
 import { X, Search, Music, Loader2, Play, ListPlus, Trash2 } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
-import { resolveTrack } from "@/lib/track";
+import { resolveTrack, ResolveError } from "@/lib/track";
+import { extractYouTubeId } from "@/lib/youtube";
 import { pushToast } from "@/components/room/ToastStack";
 
 export function TrackPicker({ onClose }: { onClose: () => void }) {
@@ -17,6 +18,8 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
     artwork?: string;
     duration?: number;
     provider?: string;
+    embeddable?: boolean;
+    playMode?: "stream" | "embed";
   } | null>(null);
 
   const handleResolve = async () => {
@@ -28,7 +31,23 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
       const result = await resolveTrack(trimmed);
       setPreview(result);
     } catch (e) {
-      pushToast((e as Error).message, "err");
+      if (e instanceof ResolveError && e.embeddable && extractYouTubeId(trimmed)) {
+        // Stream extraction blocked (datacenter bot-wall) but the video is
+        // embeddable — fall back to the hidden YouTube embed (Option B).
+        const m = e.metadata || {};
+        setPreview({
+          url: trimmed,
+          title: m.title || "YouTube video (embed fallback)",
+          artist: m.artist,
+          artwork: m.artwork,
+          provider: "youtube",
+          embeddable: true,
+          playMode: "embed",
+        });
+        pushToast("stream blocked — using embed fallback", "ok");
+      } else {
+        pushToast((e as Error).message, "err");
+      }
     } finally {
       setResolving(false);
     }

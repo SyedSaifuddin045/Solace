@@ -9,6 +9,9 @@ export interface Track {
   duration?: number;
   provider?: string;
   audioUrl?: string;
+  embeddable?: boolean;
+  /** "stream" = backend proxied audio URL, "embed" = YouTube iframe fallback */
+  playMode?: "stream" | "embed";
 }
 export interface Playback { status: PlaybackStatus; track: Track | null; position: number; updatedAt: number }
 export interface WallpaperState { url: string | null; kind: "image" | "video"; changedBy: string | null; updatedAt: number }
