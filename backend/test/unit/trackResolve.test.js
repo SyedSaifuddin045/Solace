@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { detectProvider, extractYouTubeId, cacheClear, buildYtDlpArgs, resolveYouTube, resolveTrack } = require("../../src/track/resolve");
+const { detectProvider, extractYouTubeId, cacheClear, normalizeProxy, buildProxyPool, buildYtDlpArgs, resolveYouTube, resolveTrack } = require("../../src/track/resolve");
 
 describe("detectProvider", () => {
     it("detects standard youtube.com/watch URLs", () => {
@@ -114,6 +114,32 @@ describe("buildYtDlpArgs", () => {
     });
 });
 
+describe("normalizeProxy / buildProxyPool", () => {
+    it("normalizes webshare dashboard format host:port:user:pass", () => {
+        assert.equal(
+            normalizeProxy("45.38.107.97:6014:wuoscekm:irxip6u6yr5v"),
+            "http://wuoscekm:irxip6u6yr5v@45.38.107.97:6014"
+        );
+    });
+
+    it("passes through standard proxy URLs", () => {
+        assert.equal(normalizeProxy("http://u:p@h:80"), "http://u:p@h:80");
+        assert.equal(normalizeProxy("socks5://u:p@h:1080"), "socks5://u:p@h:1080");
+    });
+
+    it("builds a pool from comma-separated env list", () => {
+        const pool = buildProxyPool({ proxy: "h1:1:u:p, http://u:p@h2:80, socks5://u:p@h3:1080" });
+        assert.equal(pool.length, 3);
+        assert.deepEqual(pool[0], "http://u:p@h1:1");
+        assert.equal(pool[1], "http://u:p@h2:80");
+        assert.equal(pool[2], "socks5://u:p@h3:1080");
+    });
+
+    it("returns empty pool when no proxy configured", () => {
+        assert.deepEqual(buildProxyPool({}), []);
+    });
+});
+
 describe("resolveYouTube", () => {
     it("returns audioUrl when yt-dlp extraction succeeds", async () => {
         cacheClear();
@@ -138,6 +164,26 @@ describe("resolveYouTube", () => {
         // second attempt with working yt-dlp must still extract (no poisoned cache)
         const result = await resolveYouTube("https://youtu.be/dQw4w9WgXcQ", { execFileAsync: fakeExecSuccess });
         assert.equal(result.audioUrl, STREAM_URL);
+    });
+
+    it("rotates to the next proxy when the first fails", async () => {
+        cacheClear();
+        const seen = [];
+        const rotatingExec = async (bin, args) => {
+            const proxy = args[args.indexOf("--proxy") + 1] || "direct";
+            seen.push(proxy);
+            if (proxy === "http://u:p@bad:1") {
+                const err = new Error("HTTP Error 429: Too Many Requests");
+                throw err;
+            }
+            return Promise.resolve({ stdout: STREAM_URL + "\n", stderr: "" });
+        };
+        const result = await resolveYouTube("https://youtu.be/dQw4w9WgXcQ", {
+            execFileAsync: rotatingExec,
+            proxy: "http://u:p@bad:1,http://u:p@good:2",
+        });
+        assert.equal(result.audioUrl, STREAM_URL);
+        assert.deepEqual(seen, ["http://u:p@bad:1", "http://u:p@good:2"]);
     });
 });
 

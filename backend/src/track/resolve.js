@@ -106,10 +106,29 @@ function postJSON(url, body, headers = {}) {
 }
 
 // YouTube now requires a JS runtime (PoT challenge) for many videos, and bot
-// checks datacenter IPs hard. node is baked into the image; a residential
-// proxy (YT_DLP_PROXY, e.g. socks5://user:pass@host:port — YouTube can't bot-
-// wall residential exits) and/or a cookies file (Cookies.txt LOCALLY export,
-// backend/cookies.txt or YT_COOKIES_FILE) opt around the wall entirely.
+// checks datacenter IPs hard. node is baked into the image; an exit pool
+// (YT_DLP_PROXY — comma-separated proxies) rotates around the wall.
+// Accepted forms per entry:
+//   "http://user:pass@host:port"        (standard)
+//   "socks5://user:pass@host:port"      (standard)
+//   "host:port:user:pass"               (Webshare dashboard copy-paste)
+// A cookies file (backend/cookies.txt or YT_COOKIES_FILE) also helps.
+function normalizeProxy(entry) {
+    if (/^[a-z0-9]+:\/\//i.test(entry)) return entry;
+    const m = entry.match(/^([^:]+):(\d+):([^:]+):(.+)$/);
+    if (m) return `http://${m[3]}:${m[4]}@${m[1]}:${m[2]}`;
+    return entry;
+}
+
+function buildProxyPool(opts = {}) {
+    const raw = opts.proxy || process.env.YT_DLP_PROXY || "";
+    return raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map(normalizeProxy);
+}
+
 function buildYtDlpArgs(canonical, opts = {}) {
     const args = [
         "-f", "bestaudio[ext=m4a]/bestaudio",
@@ -128,6 +147,10 @@ function buildYtDlpArgs(canonical, opts = {}) {
     }
     return args;
 }
+
+// Cap attempts: a working proxy extracts in 2-5s; beyond 4 dead ends just
+// eats user time and YouTube rate-limit quota.
+const MAX_PROXY_ATTEMPTS = 4;
 
 async function resolveYouTube(url, opts = {}) {
     const videoId = extractYouTubeId(url);
@@ -152,17 +175,31 @@ async function resolveYouTube(url, opts = {}) {
     // Get audio stream URL via yt-dlp. A track without a playable stream is a
     // silent failure on every client (no play, no progress, no seek) — so a
     // failed extraction MUST reject, never resolve with audioUrl null.
+    // Proxy pool rotates on failure (individual datacenter exits 429/block).
     const execFileAsync = opts.execFileAsync || execFileAsyncReal;
+    const pool = buildProxyPool(opts);
+    const attempts = pool.length > 0 ? pool.slice(0, MAX_PROXY_ATTEMPTS) : [null];
     let audioUrl = null;
-    try {
-        const { stdout } = await execFileAsync("yt-dlp", buildYtDlpArgs(canonical, opts), { timeout: 30000 });
-        audioUrl = stdout.trim() || null;
-    } catch (err) {
-        console.log("[solace:BE] yt-dlp failed", { videoId, error: err.message });
+    let lastErr = null;
+    for (const proxy of attempts) {
+        try {
+            const args = buildYtDlpArgs(canonical, proxy ? { ...opts, proxy } : opts);
+            const { stdout } = await execFileAsync("yt-dlp", args, { timeout: 30000 });
+            const url = stdout.trim();
+            if (url && /^https?:\/\//.test(url)) {
+                audioUrl = url;
+                break;
+            }
+            lastErr = new Error("empty stream output");
+        } catch (err) {
+            lastErr = err;
+            console.log("[solace:BE] yt-dlp failed", { videoId, proxy: proxy || "direct", error: err.message });
+        }
     }
     if (!audioUrl) {
         const err = new Error("NO_AUDIO_STREAM");
         err.code = "NO_AUDIO_STREAM";
+        err.cause = lastErr;
         throw err;
     }
 
@@ -227,6 +264,8 @@ async function resolveTrack(url, opts = {}) {
 module.exports = {
     detectProvider,
     extractYouTubeId,
+    normalizeProxy,
+    buildProxyPool,
     buildYtDlpArgs,
     resolveTrack,
     resolveYouTube,
