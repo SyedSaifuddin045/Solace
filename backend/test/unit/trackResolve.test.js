@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { detectProvider, extractYouTubeId, cacheClear, resolveYouTube, resolveTrack } = require("../../src/track/resolve");
+const { detectProvider, extractYouTubeId, cacheClear, buildYtDlpArgs, resolveYouTube, resolveTrack } = require("../../src/track/resolve");
 
 describe("detectProvider", () => {
     it("detects standard youtube.com/watch URLs", () => {
@@ -84,6 +84,29 @@ function fakeExecFailure() {
     err.code = "ENOENT";
     return Promise.reject(err);
 }
+
+describe("buildYtDlpArgs", () => {
+    const canonical = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+    it("uses node JS runtime for PoT-free extraction", () => {
+        const args = buildYtDlpArgs(canonical, {});
+        assert.ok(args.includes("--js-runtimes"));
+        assert.ok(args.includes("node"));
+        assert.equal(args[0], "-f");
+        assert.equal(args[args.length - 1], canonical);
+    });
+
+    it("adds --cookies when a cookies file is provided", () => {
+        const args = buildYtDlpArgs(canonical, { cookiesFile: "/cookies.txt" });
+        assert.ok(args.includes("--cookies"));
+        assert.ok(args.includes("/cookies.txt"));
+    });
+
+    it("does not add --cookies when no cookies file exists", () => {
+        const args = buildYtDlpArgs(canonical, {});
+        assert.ok(!args.includes("--cookies"));
+    });
+});
 
 describe("resolveYouTube", () => {
     it("returns audioUrl when yt-dlp extraction succeeds", async () => {

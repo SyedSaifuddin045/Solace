@@ -6,9 +6,10 @@ import { useRoomStore } from "@/lib/store";
 function RemoteStream({ stream }: { stream: MediaStream }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoActive, setVideoActive] = useState(() =>
-    stream.getVideoTracks().some((t) => t.readyState === "live" && !t.muted)
-  );
+  // Presence-based init: remote tracks can arrive muted/blank at stream
+  // creation — a muted track STILL has (soon-arriving) video, so show the
+  // element immediately. Listeners narrow it to 'audio only' on mute/ended.
+  const [videoActive, setVideoActive] = useState(() => stream.getVideoTracks().length > 0);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.srcObject = stream;
@@ -34,9 +35,13 @@ function RemoteStream({ stream }: { stream: MediaStream }) {
   return (
     <>
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
-      {videoActive ? (
-        <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-      ) : (
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        className={`w-full h-full object-cover ${videoActive ? "" : "hidden"}`}
+      />
+      {!videoActive && (
         <div className="w-full h-full grid place-items-center text-[8px] opacity-60">audio only</div>
       )}
     </>

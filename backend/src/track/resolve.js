@@ -1,5 +1,6 @@
 const https = require("node:https");
 const http = require("node:http");
+const fs = require("node:fs");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 
@@ -104,6 +105,25 @@ function postJSON(url, body, headers = {}) {
     });
 }
 
+// YouTube now requires a JS runtime (PoT challenge) for many videos, and bot
+// checks datacenter IPs hard. node is baked into the image; a cookies file
+// (Cookies.txt LOCALLY export, mounted at backend/cookies.txt or YT_COOKIES_FILE)
+// opts around the "Sign in to confirm you're not a bot" wall entirely.
+function buildYtDlpArgs(canonical, opts = {}) {
+    const args = [
+        "-f", "bestaudio[ext=m4a]/bestaudio",
+        "--get-url",
+        "--js-runtimes", "node",
+        canonical,
+    ];
+    const cookiesPath =
+        opts.cookiesFile || process.env.YT_COOKIES_FILE || (fs.existsSync("cookies.txt") ? "cookies.txt" : null);
+    if (cookiesPath) {
+        args.splice(args.length - 1, 0, "--cookies", cookiesPath);
+    }
+    return args;
+}
+
 async function resolveYouTube(url, opts = {}) {
     const videoId = extractYouTubeId(url);
     if (!videoId) throw new Error("INVALID_YOUTUBE_URL");
@@ -130,11 +150,7 @@ async function resolveYouTube(url, opts = {}) {
     const execFileAsync = opts.execFileAsync || execFileAsyncReal;
     let audioUrl = null;
     try {
-        const { stdout } = await execFileAsync("yt-dlp", [
-            "-f", "bestaudio[ext=m4a]/bestaudio",
-            "--get-url",
-            canonical,
-        ], { timeout: 30000 });
+        const { stdout } = await execFileAsync("yt-dlp", buildYtDlpArgs(canonical, opts), { timeout: 30000 });
         audioUrl = stdout.trim() || null;
     } catch (err) {
         console.log("[solace:BE] yt-dlp failed", { videoId, error: err.message });
@@ -206,6 +222,7 @@ async function resolveTrack(url, opts = {}) {
 module.exports = {
     detectProvider,
     extractYouTubeId,
+    buildYtDlpArgs,
     resolveTrack,
     resolveYouTube,
     resolveSoundCloud,
