@@ -16,6 +16,9 @@ COPY . .
 ARG NEXT_PUBLIC_BACKEND_URL
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
 
+# Cap Node heap so `next build` survives small VPS (fits in 4GB + swap)
+ENV NODE_OPTIONS="--max-old-space-size=3072"
+
 RUN pnpm build
 
 # Stage 3: Production runner
