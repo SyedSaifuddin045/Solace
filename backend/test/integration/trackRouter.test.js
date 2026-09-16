@@ -115,6 +115,8 @@ describe("track router security", () => {
         const body = await res.json();
         assert.equal(body.error, "RESOLVE_FAILED");
         assert.match(body.message, /SoundCloud/);
+        assert.equal(body.playable, false);
+        assert.equal(body.embeddable, false);
     });
 
     test("resolve unknown provider → 422 (would be dead audio otherwise)", async () => {

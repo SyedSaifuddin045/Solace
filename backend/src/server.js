@@ -75,6 +75,13 @@ function createHttpServer() {
     app.set("socketServer", socketServer.io);
     app.use(createUploadRouter(roomService));
     app.use(createTrackRouter(roomService));
+
+    // Populate live proxy pool from Webshare API if PROXY_API_KEY is set.
+    // Fire-and-forget; resolve builds pool lazily but this avoids a cold
+    // miss on the first request.
+    const { refreshProxyPool } = require("./track/proxyPool");
+    refreshProxyPool().catch(() => {});
+
     return server;
 }
 

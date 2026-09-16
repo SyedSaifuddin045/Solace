@@ -185,6 +185,30 @@ describe("resolveYouTube", () => {
         assert.equal(result.audioUrl, STREAM_URL);
         assert.deepEqual(seen, ["http://u:p@bad:1", "http://u:p@good:2"]);
     });
+
+    it("refreshes the proxy pool once and retries when the live pool is exhausted", async () => {
+        cacheClear();
+        const savedKey = process.env.PROXY_API_KEY;
+        process.env.PROXY_API_KEY = "test-key";
+        try {
+            let refreshes = 0;
+            const failingExec = async () => {
+                const err = new Error("HTTP Error 429: Too Many Requests");
+                throw err;
+            };
+            await assert.rejects(
+                resolveYouTube("https://youtu.be/dQw4w9WgXcQ", {
+                    execFileAsync: failingExec,
+                    refreshProxyPool: async () => { refreshes++; return []; },
+                }),
+                (err) => err.message === "NO_AUDIO_STREAM"
+            );
+            assert.equal(refreshes, 1, "pool should refresh exactly once after exhausted attempts");
+        } finally {
+            if (savedKey === undefined) delete process.env.PROXY_API_KEY;
+            else process.env.PROXY_API_KEY = savedKey;
+        }
+    });
 });
 
 describe("resolveTrack playability contract", () => {

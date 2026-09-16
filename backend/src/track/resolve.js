@@ -3,6 +3,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
+const { normalizeProxy, getProxyPool, refreshProxyPool } = require("./proxyPool");
 
 const execFileAsyncReal = promisify(execFile);
 
@@ -113,20 +114,17 @@ function postJSON(url, body, headers = {}) {
 //   "socks5://user:pass@host:port"      (standard)
 //   "host:port:user:pass"               (Webshare dashboard copy-paste)
 // A cookies file (backend/cookies.txt or YT_COOKIES_FILE) also helps.
-function normalizeProxy(entry) {
-    if (/^[a-z0-9]+:\/\//i.test(entry)) return entry;
-    const m = entry.match(/^([^:]+):(\d+):([^:]+):(.+)$/);
-    if (m) return `http://${m[3]}:${m[4]}@${m[1]}:${m[2]}`;
-    return entry;
-}
-
+// Proxy pool order: explicit opts.proxy (tests) > live Webshare API pool
+// (PROXY_API_KEY) > static YT_DLP_PROXY env list > direct.
 function buildProxyPool(opts = {}) {
-    const raw = opts.proxy || process.env.YT_DLP_PROXY || "";
-    return raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map(normalizeProxy);
+    if (opts.proxy) {
+        return opts.proxy
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map(normalizeProxy);
+    }
+    return getProxyPool();
 }
 
 function buildYtDlpArgs(canonical, opts = {}) {
@@ -164,10 +162,12 @@ async function resolveYouTube(url, opts = {}) {
     // Get metadata from oEmbed — best effort, never fatal
     let title = null;
     let artist = null;
+    let embeddable = false;
     try {
         const oembed = await fetchJSON(`https://www.youtube.com/oembed?url=${encodeURIComponent(canonical)}&format=json`);
         title = oembed.title || null;
         artist = oembed.author_name || null;
+        embeddable = !!oembed.html;
     } catch {
         // ignore — metadata is optional
     }
@@ -175,31 +175,46 @@ async function resolveYouTube(url, opts = {}) {
     // Get audio stream URL via yt-dlp. A track without a playable stream is a
     // silent failure on every client (no play, no progress, no seek) — so a
     // failed extraction MUST reject, never resolve with audioUrl null.
-    // Proxy pool rotates on failure (individual datacenter exits 429/block).
+    // Proxy pool rotates on failure (individual datacenter exits 429/block);
+    // when the whole live pool is exhausted, refresh from Webshare once and
+    // retry (self-healing without redeploys).
     const execFileAsync = opts.execFileAsync || execFileAsyncReal;
-    const pool = buildProxyPool(opts);
-    const attempts = pool.length > 0 ? pool.slice(0, MAX_PROXY_ATTEMPTS) : [null];
     let audioUrl = null;
     let lastErr = null;
-    for (const proxy of attempts) {
-        try {
-            const args = buildYtDlpArgs(canonical, proxy ? { ...opts, proxy } : opts);
-            const { stdout } = await execFileAsync("yt-dlp", args, { timeout: 30000 });
-            const url = stdout.trim();
-            if (url && /^https?:\/\//.test(url)) {
-                audioUrl = url;
-                break;
+    let refreshedOnce = false;
+    outer: for (let pass = 0; pass < 2; pass++) {
+        const pool = buildProxyPool(opts);
+        const attempts = pool.length > 0 ? pool.slice(0, MAX_PROXY_ATTEMPTS) : [null];
+        for (const proxy of attempts) {
+            try {
+                const args = buildYtDlpArgs(canonical, proxy ? { ...opts, proxy } : opts);
+                const { stdout } = await execFileAsync("yt-dlp", args, { timeout: 30000 });
+                const url = stdout.trim();
+                if (url && /^https?:\/\//.test(url)) {
+                    audioUrl = url;
+                    break outer;
+                }
+                lastErr = new Error("empty stream output");
+            } catch (err) {
+                lastErr = err;
+                console.log("[solace:BE] yt-dlp failed", { videoId, proxy: proxy || "direct", error: err.message });
             }
-            lastErr = new Error("empty stream output");
-        } catch (err) {
-            lastErr = err;
-            console.log("[solace:BE] yt-dlp failed", { videoId, proxy: proxy || "direct", error: err.message });
         }
+        if (refreshedOnce || opts.proxy) break;
+        if (!process.env.PROXY_API_KEY) break;
+        const doRefresh = opts.refreshProxyPool || refreshProxyPool;
+        await doRefresh({ force: true });
+        refreshedOnce = true;
     }
     if (!audioUrl) {
         const err = new Error("NO_AUDIO_STREAM");
         err.code = "NO_AUDIO_STREAM";
         err.cause = lastErr;
+        err.embeddable = embeddable;
+        // Carry metadata so the client can render a YouTube embed fallback
+        err.title = title;
+        err.artist = artist;
+        err.artwork = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
         throw err;
     }
 
@@ -211,6 +226,7 @@ async function resolveYouTube(url, opts = {}) {
         duration: null,
         provider: "youtube",
         audioUrl,
+        embeddable,
     };
     cacheSet(cacheKey, result);
     return result;
