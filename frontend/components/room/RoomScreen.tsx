@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
 import { ChromeReveal } from "@/components/room/ChromeReveal";
 import { TitleChip } from "@/components/room/TitleChip";
@@ -33,7 +34,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const params = useParams<{ roomId: string }>();
   const roomId = propRoomId || (params?.roomId as string) || "";
 
-  const state = useRoomStore((s) => s.state);
+  const wallpaper = useRoomStore((s) => s.state.wallpaper);
   const connected = useRoomStore((s) => s.connected);
   const error = useRoomStore((s) => s.error);
 
@@ -64,6 +65,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
     if (activePanel !== "none") {
       requestAnimationFrame(() => setPanelOpen(true));
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPanelOpen(false);
     }
   }, [activePanel]);
@@ -166,8 +168,6 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
     return <PasswordGate roomId={roomId} />;
   }
 
-  const wallpaper = state.wallpaper;
-
   return (
     <main className="relative min-h-screen overflow-hidden">
       {/* wallpaper layer — full bleed */}
@@ -227,9 +227,13 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
         <TimerCenter />
       </div>
 
-      {/* panels — rendered at top level outside ChromeReveal z-stack */}
-      {activePanel !== "none" && (
-        <>
+      {/* panels — portaled to <body> so their conditional mount never
+          reconciles inside <main>'s sibling order (framer-motion rows, the
+          audio engine, and the YT embed all live there; inserting a panel
+          mid-tree after any out-of-band DOM mutation used to throw
+          NotFoundError insertBefore). */}
+      {activePanel !== "none" &&
+        createPortal(
           <div
             className="fixed inset-y-0 right-0 w-full max-w-sm glass z-30 flex flex-col"
             style={{
@@ -244,24 +248,26 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
               {activePanel === "theme" && <ThemePanel onClose={() => setActivePanel("none")} />}
               {activePanel === "wallpaper" && <WallpaperPanel onClose={() => setActivePanel("none")} />}
             </div>
-          </div>
-        </>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* overlays */}
       <ReconnectOverlay visible={!connected} />
 
-      {/* track picker */}
-      {trackPickerOpen && <TrackPicker onClose={() => setTrackPickerOpen(false)} />}
+      {/* track picker — portaled, same reasoning as panels */}
+      {trackPickerOpen && createPortal(<TrackPicker onClose={() => setTrackPickerOpen(false)} />, document.body)}
 
-      {/* queue panel */}
-      {queueOpen && (
-        <div className="fixed inset-0 z-30 grid place-items-center" style={{ background: "rgba(20,17,15,0.85)" }} onClick={() => setQueueOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()}>
-            <QueuePanel onClose={() => setQueueOpen(false)} />
-          </div>
-        </div>
-      )}
+      {/* queue panel — portaled */}
+      {queueOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-30 grid place-items-center" style={{ background: "rgba(20,17,15,0.85)" }} onClick={() => setQueueOpen(false)}>
+            <div onClick={(e) => e.stopPropagation()}>
+              <QueuePanel onClose={() => setQueueOpen(false)} />
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* setup overlay */}
       {setupVisible && <RoomSetupOverlay onEnter={handleSetupEnter} />}
