@@ -14,10 +14,15 @@ function useAudioProgress(status: string) {
   useEffect(() => {
     if (status !== "playing") return;
     const id = setInterval(() => {
-      const engine = getPlaybackEngine();
-      if (engine) {
-        setPos(engine.currentTime);
-        setDur(engine.duration || 0);
+      try {
+        const engine = getPlaybackEngine();
+        if (engine) {
+          setPos(engine.currentTime);
+          setDur(engine.duration || 0);
+        }
+      } catch {
+        // A broken engine (e.g. a degraded YT embed) must never spam the
+        // console every 250ms or take down the widget.
       }
     }, 250);
     return () => clearInterval(id);

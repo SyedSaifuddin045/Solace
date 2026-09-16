@@ -269,31 +269,43 @@ export function YouTubePlayer() {
 
   const videoId = track ? extractYouTubeId(track.url) : null;
 
+  // The IFrame API is a hostile third-party guest: playerRef.current may hold
+  // a non-player object (adblocker patches, a failed `new YT.Player`,
+  // double-ready races) whose methods are missing. Guard every call.
+  const safePlayer = (): YTPlayer | null => {
+    const p = playerRef.current;
+    return p && typeof p.getCurrentTime === "function" && typeof p.playVideo === "function" ? p : null;
+  };
+
   const applyState = () => {
-    const player = playerRef.current;
+    const player = safePlayer();
+    if (!player) return;
     const id = lastVideoIdRef.current;
-    if (!player || !id) return;
-    if (statusRef.current === "playing") {
-      const elapsed = (Date.now() - updatedAtRef.current) / 1000;
-      const targetTime = Math.max(0, positionRef.current + elapsed);
-      const diff = Math.abs(player.getCurrentTime() - targetTime);
-      if (diff > 2 && diff < 600) {
-        player.seekTo(targetTime, true);
+    try {
+      if (statusRef.current === "playing") {
+        const elapsed = (Date.now() - updatedAtRef.current) / 1000;
+        const targetTime = Math.max(0, positionRef.current + elapsed);
+        const diff = Math.abs(player.getCurrentTime() - targetTime);
+        if (diff > 2 && diff < 600) {
+          player.seekTo(targetTime, true);
+        }
+        if (lastStatusRef.current !== "play") {
+          lastStatusRef.current = "play";
+          player.playVideo();
+        }
+      } else {
+        const targetTime = Math.max(0, positionRef.current);
+        const diff = Math.abs(player.getCurrentTime() - targetTime);
+        if (diff > 2 && diff < 600) {
+          player.seekTo(targetTime, true);
+        }
+        if (lastStatusRef.current !== "pause") {
+          lastStatusRef.current = "pause";
+          player.pauseVideo();
+        }
       }
-      if (lastStatusRef.current !== "play") {
-        lastStatusRef.current = "play";
-        player.playVideo();
-      }
-    } else {
-      const targetTime = Math.max(0, positionRef.current);
-      const diff = Math.abs(player.getCurrentTime() - targetTime);
-      if (diff > 2 && diff < 600) {
-        player.seekTo(targetTime, true);
-      }
-      if (lastStatusRef.current !== "pause") {
-        lastStatusRef.current = "pause";
-        player.pauseVideo();
-      }
+    } catch {
+      // Never let a broken embed take down the room UI.
     }
   };
 
@@ -317,7 +329,7 @@ export function YouTubePlayer() {
         playerVars: { playsinline: 1, controls: 0 },
         events: {
           onReady: () => {
-            const p = playerRef.current;
+            const p = safePlayer();
             if (!p) return;
             if (lastVideoIdRef.current) p.loadVideoById(lastVideoIdRef.current);
             applyState();
@@ -343,38 +355,39 @@ export function YouTubePlayer() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__solaceEmbed = {
       get currentTime() {
-        return playerRef.current ? playerRef.current.getCurrentTime() : 0;
+        return safePlayer()?.getCurrentTime() ?? 0;
       },
       get duration() {
-        return playerRef.current ? playerRef.current.getDuration() : 0;
+        return safePlayer()?.getDuration() ?? 0;
       },
       muted: false,
       get currentSrc() {
-        return playerRef.current?.getVideoData().video_id ?? "";
+        return safePlayer()?.getVideoData().video_id ?? "";
       },
       get volume() {
-        return playerRef.current ? playerRef.current.getVolume() / 100 : 0;
+        return (safePlayer()?.getVolume() ?? 0) / 100;
       },
       seekTo(seconds: number) {
-        playerRef.current?.seekTo(Math.max(0, seconds), true);
+        safePlayer()?.seekTo(Math.max(0, seconds), true);
       },
       setVolume(volume: number) {
-        playerRef.current?.setVolume(Math.round(Math.min(1, Math.max(0, volume)) * 100));
+        safePlayer()?.setVolume(Math.round(Math.min(1, Math.max(0, volume)) * 100));
       },
       play() {
-        playerRef.current?.playVideo();
+        safePlayer()?.playVideo();
       },
     };
     return () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).__solaceEmbed;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Video id changed → load the new video, then re-apply state
   useEffect(() => {
     if (!videoId) return;
-    const player = playerRef.current;
+    const player = safePlayer();
     if (lastVideoIdRef.current !== videoId) {
       lastVideoIdRef.current = videoId;
       if (player) player.loadVideoById(videoId);
