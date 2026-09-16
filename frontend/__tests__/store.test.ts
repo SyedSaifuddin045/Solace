@@ -103,3 +103,24 @@ describe("reset clears pendingTimerMinutes", () => {
     expect(useRoomStore.getState().pendingTimerMinutes).toBeNull();
   });
 });
+describe("detached feed (PiP) actions", () => {
+  it("detachFeed stores socketId + title, dockFeed clears, reset clears", () => {
+    useRoomStore.getState().detachFeed("s2", "Alice");
+    expect(useRoomStore.getState().detachedFeed).toEqual({ socketId: "s2", title: "Alice" });
+    useRoomStore.getState().dockFeed();
+    expect(useRoomStore.getState().detachedFeed).toBeNull();
+    useRoomStore.getState().detachFeed("s2", "Alice");
+    useRoomStore.getState().reset();
+    expect(useRoomStore.getState().detachedFeed).toBeNull();
+  });
+});
+
+describe("clearRemoteStreams", () => {
+  it("clears all remote streams", () => {
+    const stream = {} as MediaStream;
+    useRoomStore.getState().setRemoteStream("s1", stream);
+    useRoomStore.getState().setRemoteStream("s2", stream);
+    useRoomStore.getState().clearRemoteStreams();
+    expect(useRoomStore.getState().remoteStreams).toEqual({});
+  });
+});

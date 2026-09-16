@@ -18,11 +18,12 @@ export function useAutoAdvance() {
     }
   }, [status, track, queue]);
 
-  // Detect track end via audio element and advance
+  // Detect track end and advance. Proxied stream mode fires the audio
+  // element's `ended`; embed fallback mode dispatches `solace:track-ended`
+  // from the hidden YT iframe (there is no audio element to listen to).
   useEffect(() => {
     if (status !== "playing") return;
     const audio = getAudioElement();
-    if (!audio) return;
 
     advancedRef.current = false;
 
@@ -39,7 +40,11 @@ export function useAutoAdvance() {
       }
     };
 
-    audio.addEventListener("ended", handleEnded);
-    return () => audio.removeEventListener("ended", handleEnded);
+    audio?.addEventListener("ended", handleEnded);
+    window.addEventListener("solace:track-ended", handleEnded);
+    return () => {
+      audio?.removeEventListener("ended", handleEnded);
+      window.removeEventListener("solace:track-ended", handleEnded);
+    };
   }, [status, track]);
 }

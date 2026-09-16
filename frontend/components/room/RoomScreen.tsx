@@ -22,11 +22,12 @@ import { getSocket } from "@/lib/socket";
 import { useRoomStore } from "@/lib/store";
 import { readRoomPassword } from "@/lib/password";
 import { loadPrefs } from "@/lib/prefs";
-import { initRtc, startSpeakingDetection, stopRtc } from "@/lib/rtc";
+import { initRtc, rebuildAfterReconnect, startSpeakingDetection, stopRtc } from "@/lib/rtc";
 import { resolveAssetUrl } from "@/lib/upload";
 import { isGradientUrl, gradientCss } from "@/lib/wallpaper";
 import { useAutoAdvance } from "@/hooks/useAutoAdvance";
-import { AudioPlayer } from "@/components/room/VideoPlayer";
+import { TrackPlayback } from "@/components/room/VideoPlayer";
+import { DetachedVideoWindow } from "@/components/video/VideoFeed";
 
 export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const params = useParams<{ roomId: string }>();
@@ -95,10 +96,30 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
     ];
     console.debug("[solace:FE] RoomScreen listeners registered", ons.map(([n]) => n));
     ons.forEach(([n, f]) => socket.on(n, f as never));
-    socket.on("connect", () => {
+
+    // Backend membership is socket.id-keyed: any disconnect drops us from the
+    // room, and socket.io reconnect gives us a NEW id. Without a rejoin we
+    // become a ghost — store hydrated, but zero backend events. Track which
+    // socket id we joined as and rejoin + rebuild RTC whenever it changes.
+    const joinedFor = useRoomStore.getState().socketId;
+    const prefs = loadPrefs();
+    const joinRoom = () => {
+      const password = readRoomPassword(roomId) ?? undefined;
+      console.debug("[solace:FE] RoomScreen join emit", { roomId, displayName: prefs.name, hasAvatar: !!prefs.avatar, hasPassword: !!password });
+      socket.emit("room:join", { roomId, displayName: prefs.name, avatar: prefs.avatar, password });
+    };
+
+    const handleConnect = () => {
       useRoomStore.getState().setConnected(true);
-      useRoomStore.getState().setSocketId(socket.id ?? null);
-    });
+      const sid = socket.id ?? null;
+      useRoomStore.getState().setSocketId(sid);
+      if (sid && sid !== joinedFor) {
+        console.debug("[solace:FE] RoomScreen reconnect detected", { from: joinedFor, to: sid });
+        joinRoom();
+        rebuildAfterReconnect();
+      }
+    };
+    socket.on("connect", handleConnect);
     socket.on("disconnect", () => {
       useRoomStore.getState().setConnected(false);
       useRoomStore.getState().setSocketId(null);
@@ -116,16 +137,14 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
 
     // join (also covers reloads: rejoin replays snapshot via room:joined)
     if (useRoomStore.getState().roomId !== roomId) {
-      const prefs = loadPrefs();
-      const password = readRoomPassword(roomId) ?? undefined;
-      console.debug("[solace:FE] RoomScreen join emit", { roomId, displayName: prefs.name, hasAvatar: !!prefs.avatar, hasPassword: !!password });
-      socket.emit("room:join", { roomId, displayName: prefs.name, avatar: prefs.avatar, password });
+      joinRoom();
     } else {
       console.debug("[solace:FE] RoomScreen skip join (store already hydrated)", { roomId });
     }
 
     return () => {
       ons.forEach(([n, f]) => socket.off(n, f as never));
+      socket.off("connect", handleConnect);
       stopRtc();
     };
   }, [roomId]);
@@ -179,23 +198,19 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
         className="transition-transform duration-300 ease-out"
         style={{ transform: activePanel !== "none" ? "translateX(-25rem)" : "translateX(0)" }}
       >
-        <ChromeReveal className="absolute top-3 sm:top-4 right-3 sm:right-5 z-20"><UsersStack /></ChromeReveal>
+        {/* UsersStack manages its own idle/pin visibility — no ChromeReveal wrapper */}
+        <div className="absolute top-3 sm:top-4 right-3 sm:right-5 z-20"><UsersStack /></div>
       </div>
-      {/* bottom controls — single render, shift left when panel opens */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 flex-row gap-3">
-        <ChromeReveal className="shrink-0 max-w-[40%]"><SongWidget onOpenPicker={() => setTrackPickerOpen(true)} onOpenQueue={() => setQueueOpen(true)} /></ChromeReveal>
+      {/* bottom controls — responsive: stacked column on mobile, row on desktop */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center sm:flex-row sm:items-end sm:justify-between gap-2 p-3 sm:p-4">
+        <ChromeReveal className="w-full sm:w-auto shrink-0 sm:max-w-[40%]"><SongWidget onOpenPicker={() => setTrackPickerOpen(true)} onOpenQueue={() => setQueueOpen(true)} /></ChromeReveal>
 
-        {/* media controls — bottom center, shifts with panel */}
-        <div
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-auto transition-[left] duration-300 ease-out"
-          style={{ left: activePanel !== "none" ? "calc(50% - 12.5rem)" : "50%" }}
-        >
-          <ChromeReveal className="shrink-0"><MediaControls /></ChromeReveal>
-        </div>
+        {/* media controls — always visible (mic/cam/leave) */}
+        <ChromeReveal className="shrink-0"><MediaControls /></ChromeReveal>
 
-        <ChromeReveal className="shrink-0 max-w-[60%]">
+        <ChromeReveal className="shrink-0 sm:max-w-[60%]">
           <div
-            className="flex flex-col items-end gap-1.5 transition-transform duration-300 ease-out hidden sm:flex"
+            className="flex flex-col items-center sm:items-end gap-1.5 transition-transform duration-300 ease-out"
             style={{ transform: activePanel !== "none" ? "translateX(-25rem)" : "translateX(0)" }}
           >
             <ToastStack />
@@ -251,8 +266,11 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       {/* setup overlay */}
       {setupVisible && <RoomSetupOverlay onEnter={handleSetupEnter} />}
 
-      {/* hidden audio player (YouTube) */}
-      <AudioPlayer />
+      {/* hidden playback engine (proxied audio or YouTube embed fallback) */}
+      <TrackPlayback />
+
+      {/* undocked PiP video — top level, outside all idle chrome: never fades */}
+      <DetachedVideoWindow />
     </main>
   );
 }

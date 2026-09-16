@@ -664,4 +664,27 @@ describe("rate limiter + host lifecycle (production bug regressions)", () => {
         await wait(200);
         assert.equal(target.connected, false, "general flood must still disconnect");
     });
+
+    test("rtc relay burst (ICE candidates) does not trip general flood gate", async () => {
+        const { port } = await boot();
+        const target = track(await connectClient(port));
+        // A busy 4-member mesh can legitimately burst 100+ relay events in a
+        // window during renegotiation. The relay budget (240/10s) must absorb
+        // this without a forced disconnect.
+        for (let i = 0; i < 120; i++) {
+            target.emit("rtc:ice", { to: "peer-xyz", candidate: { candidate: `cand-${i}`, sdpMid: "0", sdpMLineIndex: 0 } });
+        }
+        await wait(200);
+        assert.equal(target.connected, true, "relay burst must NOT disconnect");
+    });
+
+    test("rtc relay flood beyond relay budget still rate-limited", async () => {
+        const { port } = await boot();
+        const target = track(await connectClient(port));
+        for (let i = 0; i < 300; i++) {
+            target.emit("rtc:ice", { to: "peer-xyz", candidate: { candidate: `cand-${i}`, sdpMid: "0", sdpMLineIndex: 0 } });
+        }
+        await wait(200);
+        assert.equal(target.connected, false, "runaway relay flood must still disconnect");
+    });
 });

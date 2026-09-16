@@ -26,11 +26,21 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
     const EVENT_LIMIT = 60;             // max events per window
     const EVENT_WINDOW_MS = 10_000;     // window length
     const SENSITIVE_EVENT_LIMIT = 10;   // stricter cap for room-mutating broadcasts
+    // WebRTC relay events are 1:1 fan-out (never room broadcasts) and legit
+    // call setup bursts dozens of ICE candidates in seconds, especially in a
+    // 4-member mesh. Give them their own budget so normal negotiation never
+    // trips the general flood gate (which force-disconnects the sender).
+    const RELAY_EVENT_LIMIT = 240;      // per-window budget for rtc:offer/answer/ice
     const SENSITIVE_EVENTS = new Set([
         CLIENT.ROOM_CREATE,
         CLIENT.ROOM_JOIN,
         CLIENT.PLAYBACK_SET_TRACK,
         CLIENT.WALLPAPER_SET
+    ]);
+    const RELAY_EVENTS = new Set([
+        CLIENT.RTC_OFFER,
+        CLIENT.RTC_ANSWER,
+        CLIENT.RTC_ICE
     ]);
 
     function makeRateLimiter() {
@@ -48,7 +58,24 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
         };
     }
 
+    // Relay bucket: per socket, high ceiling, isolated from the general cap.
+    function makeRelayLimiter() {
+        const buckets = new Map();
+        return function check(socket) {
+            const now = Date.now();
+            let bucket = buckets.get(socket.id);
+            if (!bucket || now - bucket.startedAt > EVENT_WINDOW_MS) {
+                bucket = { count: 0, startedAt: now };
+                buckets.set(socket.id, bucket);
+            }
+            const allow = bucket.count < RELAY_EVENT_LIMIT;
+            bucket.count += 1;
+            return { allow };
+        };
+    }
+
     const globalRateCheck = makeRateLimiter();
+    const relayRateCheck = makeRelayLimiter();
 
     const roomHandler = createRoomHandler(io, roomService);
     const playbackHandler = createPlaybackHandler(io, roomService);
@@ -68,9 +95,21 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
             }
         }
 
-        // Rate-limit guard: disconnect sockets that flood events
+        // Rate-limit guard: disconnect sockets that flood events.
+        // Relay events (rtc:offer/answer/ice) use their own high budget so
+        // legit ICE bursts never trip the general gate.
         function guarded(eventName, handler) {
             return (...args) => {
+                if (RELAY_EVENTS.has(eventName)) {
+                    const { allow } = relayRateCheck(socket);
+                    if (!allow) {
+                        socket.emit(SERVER.ROOM_ERROR, { code: "RATE_LIMITED", message: "Too many RTC events — slow down" });
+                        socket.disconnect(true);
+                        return;
+                    }
+                    handler(...args);
+                    return;
+                }
                 const { allow, bucket } = globalRateCheck(socket);
                 if (!allow) {
                     socket.emit(SERVER.ROOM_ERROR, { code: "RATE_LIMITED", message: "Too many events — slow down" });

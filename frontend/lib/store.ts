@@ -9,6 +9,9 @@ export interface Track {
   duration?: number;
   provider?: string;
   audioUrl?: string;
+  embeddable?: boolean;
+  /** "stream" = backend proxied audio URL, "embed" = YouTube iframe fallback */
+  playMode?: "stream" | "embed";
 }
 export interface Playback { status: PlaybackStatus; track: Track | null; position: number; updatedAt: number }
 export interface WallpaperState { url: string | null; kind: "image" | "video"; changedBy: string | null; updatedAt: number }
@@ -50,12 +53,16 @@ interface RoomStore {
   audioOnLocal: boolean;
   videoOnLocal: boolean;
   remoteStreams: Record<string, MediaStream>;
+  detachedFeed: { socketId: string; title: string } | null;
   pendingTimerMinutes: number | null;
   setConnected: (v: boolean) => void;
   setSocketId: (id: string | null) => void;
   setSpeaking: (ids: string[]) => void;
   setLocalMedia: (audioOn: boolean, videoOn: boolean) => void;
   setRemoteStream: (socketId: string, stream: MediaStream | null) => void;
+  clearRemoteStreams: () => void;
+  detachFeed: (socketId: string, title: string) => void;
+  dockFeed: () => void;
   armTimer: (minutes: number | null) => void;
   clearError: () => void;
   reset: () => void;
@@ -102,6 +109,7 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   audioOnLocal: false,
   videoOnLocal: false,
   remoteStreams: {},
+  detachedFeed: null,
   pendingTimerMinutes: null,
   setConnected: (v) => set({ connected: v }),
   setSocketId: (id) => set({ socketId: id }),
@@ -114,9 +122,12 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
       else delete remoteStreams[socketId];
       return { remoteStreams };
     }),
+  clearRemoteStreams: () => set({ remoteStreams: {} }),
+  detachFeed: (socketId, title) => set({ detachedFeed: { socketId, title } }),
+  dockFeed: () => set({ detachedFeed: null }),
   armTimer: (minutes) => set({ pendingTimerMinutes: minutes }),
   clearError: () => set({ error: null }),
-  reset: () => set({ roomId: null, members: [], state: EMPTY_STATE, error: null, speaking: [], audioOnLocal: false, videoOnLocal: false, remoteStreams: {}, pendingTimerMinutes: null }),
+  reset: () => set({ roomId: null, members: [], state: EMPTY_STATE, error: null, speaking: [], audioOnLocal: false, videoOnLocal: false, remoteStreams: {}, detachedFeed: null, pendingTimerMinutes: null }),
 
   applyEvent: (name, payload) => {
     const s = get();

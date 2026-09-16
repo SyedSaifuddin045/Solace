@@ -4,7 +4,7 @@ import { Play, Pause, Music, SkipForward } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { formatRemaining } from "@/lib/time";
-import { getAudioElement } from "@/components/room/VideoPlayer";
+import { getPlaybackEngine } from "@/components/room/VideoPlayer";
 
 function useAudioProgress(status: string) {
   const [pos, setPos] = useState(0);
@@ -13,10 +13,10 @@ function useAudioProgress(status: string) {
   useEffect(() => {
     if (status !== "playing") return;
     const id = setInterval(() => {
-      const audio = getAudioElement();
-      if (audio) {
-        setPos(audio.currentTime);
-        setDur(audio.duration || 0);
+      const engine = getPlaybackEngine();
+      if (engine) {
+        setPos(engine.currentTime);
+        setDur(engine.duration || 0);
       }
     }, 250);
     return () => clearInterval(id);
@@ -42,10 +42,18 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
   const toggle = () => {
     const s = getSocket();
     if (status === "playing") {
-      const audio = getAudioElement();
-      const pos = audio ? audio.currentTime : 0;
+      const engine = getPlaybackEngine();
+      const pos = engine ? engine.currentTime : 0;
       s.emit("playback:pause", { position: pos });
     } else {
+      // Resume within the user gesture: the server ack arrives AFTER the
+      // gesture expires, so the effect-side play() would be autoplay-blocked.
+      // Starting the already-loaded element synchronously keeps sound on.
+      const engine = getPlaybackEngine();
+      if (engine && engine.currentSrc) {
+        engine.muted = false;
+        engine.play();
+      }
       s.emit("playback:play");
     }
   };
@@ -55,8 +63,8 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
     const rect = progressRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const seekTo = ratio * duration;
-    const audio = getAudioElement();
-    if (audio) audio.currentTime = seekTo;
+    const engine = getPlaybackEngine();
+    if (engine) engine.seekTo(seekTo);
     getSocket().emit("playback:seek", { position: seekTo });
   }, [duration]);
 

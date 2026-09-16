@@ -294,6 +294,10 @@ export function initRtc(): void {
       pendingNegotiation.delete(pc);
     }
     useRoomStore.getState().setRemoteStream(p.socketId, null);
+    // A detached (PiP) feed for a member who left must disappear too.
+    if (useRoomStore.getState().detachedFeed?.socketId === p.socketId) {
+      useRoomStore.getState().dockFeed();
+    }
   });
   socket.on("connect", () => {
     me = socket.id ?? null;
@@ -312,6 +316,30 @@ export function stopRtc(): void {
     pendingNegotiation.delete(pc);
   });
   peers.clear();
+}
+
+/**
+ * After a socket reconnect the backend has dropped our old socket.id from the
+ * room (membership is id-keyed) and our peers still reference stale ids. Tear
+ * everything down, clear remote streams, then re-acquire local media and let
+ * the next negotiation rebuild peers under the new socket id.
+ */
+export function rebuildAfterReconnect(): void {
+  console.debug("[solace:FE] rtc rebuildAfterReconnect", { peers: peers.size, hadLocalStream: !!localStream });
+  localStream?.getTracks().forEach((t) => t.stop());
+  localStream = null;
+  peers.forEach((pc) => {
+    pc.close();
+    senders.delete(pc);
+    pendingNegotiation.delete(pc);
+  });
+  peers.clear();
+  useRoomStore.getState().clearRemoteStreams();
+  const { audioOnLocal, videoOnLocal } = useRoomStore.getState();
+  if (audioOnLocal || videoOnLocal) {
+    console.debug("[solace:FE] rtc rebuildAfterReconnect re-acquire media", { audioOnLocal, videoOnLocal });
+    void startRtc({ audio: audioOnLocal, video: videoOnLocal });
+  }
 }
 
 const analysers = new Map<string, AnalyserNode>();

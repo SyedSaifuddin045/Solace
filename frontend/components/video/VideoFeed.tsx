@@ -48,23 +48,18 @@ function RemoteStream({ stream }: { stream: MediaStream }) {
   );
 }
 
+/** Docked feed tile — double-click detaches into a floating PiP window. */
 export function VideoFeed({ socketId, memberName }: { socketId: string; memberName: string }) {
   const stream = useRoomStore((s) => s.remoteStreams[socketId]);
-  const [detached, setDetached] = useState(false);
+  const detached = useRoomStore((s) => s.detachedFeed?.socketId === socketId);
 
-  if (detached) {
-    return (
-      <PipWindow title={memberName} onReDock={() => setDetached(false)}>
-        {stream && <RemoteStream stream={stream} />}
-      </PipWindow>
-    );
-  }
+  if (detached) return null;
 
   return (
     <div
       className="relative rounded-lg overflow-hidden"
       style={{ width: 120, height: 90, border: "1px solid rgba(224,164,88,0.3)" }}
-      onDoubleClick={() => setDetached(true)}
+      onDoubleClick={() => useRoomStore.getState().detachFeed(socketId, memberName)}
       title="double-click to detach"
     >
       {stream ? (
@@ -73,5 +68,26 @@ export function VideoFeed({ socketId, memberName }: { socketId: string; memberNa
         <div className="w-full h-full grid place-items-center text-[8px] opacity-50">connecting…</div>
       )}
     </div>
+  );
+}
+
+/**
+ * The undocked (PiP) feed. Mounted OUTSIDE any idle/hover chrome in RoomScreen
+ * so it never fades or hides — an undocked video stays visible forever.
+ */
+export function DetachedVideoWindow() {
+  const detachedFeed = useRoomStore((s) => s.detachedFeed);
+  const stream = useRoomStore((s) => (detachedFeed ? s.remoteStreams[detachedFeed.socketId] : null));
+
+  if (!detachedFeed) return null;
+
+  return (
+    <PipWindow title={detachedFeed.title} onReDock={() => useRoomStore.getState().dockFeed()}>
+      {stream ? (
+        <RemoteStream stream={stream} />
+      ) : (
+        <div className="w-full h-full grid place-items-center text-[8px] opacity-50">connecting…</div>
+      )}
+    </PipWindow>
   );
 }

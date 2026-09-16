@@ -15,3 +15,21 @@ describe("useIdle", () => {
     expect(result.current).toBe(false);
   });
 });
+describe("useIdle touch support", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  it("touchstart resets the idle clock", () => {
+    const { result } = renderHook(() => useIdle(5_000));
+    act(() => vi.advanceTimersByTime(5_001));
+    expect(result.current).toBe(true);
+    act(() => window.dispatchEvent(new Event("touchstart")));
+    expect(result.current).toBe(false);
+  });
+  it("touchmove resets the idle clock (scrolling keeps chrome alive)", () => {
+    const { result } = renderHook(() => useIdle(5_000));
+    act(() => vi.advanceTimersByTime(5_001));
+    expect(result.current).toBe(true);
+    act(() => window.dispatchEvent(new Event("touchmove")));
+    expect(result.current).toBe(false);
+  });
+});
