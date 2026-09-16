@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
-import { getAudioElement } from "@/components/room/VideoPlayer";
+import { getAudioElement, getPlaybackEngine } from "@/components/room/VideoPlayer";
 
 export function useAutoAdvance() {
   const track = useRoomStore((s) => s.state.playback.track);
@@ -36,7 +36,12 @@ export function useAutoAdvance() {
         getSocket().emit("playback:queue_remove", { index: 0 });
         getSocket().emit("playback:play");
       } else {
-        getSocket().emit("playback:pause");
+        // Pause WITH the real end position — a bare `playback:pause` leaves
+        // the canonical position at its last snapshot (often 0 for a long
+        // track), so every client snaps the progress bar back to that stale
+        // timestamp instead of staying at the end.
+        const pos = getPlaybackEngine()?.currentTime ?? 0;
+        getSocket().emit("playback:pause", { position: pos });
       }
     };
 

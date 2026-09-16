@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Play, Pause, Music, SkipForward } from "lucide-react";
+import { Play, Pause, Music, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { useRoomStore } from "@/lib/store";
 import { getSocket } from "@/lib/socket";
 import { formatRemaining } from "@/lib/time";
+import { loadVolume, saveVolume } from "@/lib/volume";
 import { getPlaybackEngine } from "@/components/room/VideoPlayer";
 
 function useAudioProgress(status: string) {
@@ -32,6 +33,30 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
   const [hover, setHover] = useState(false);
   const { pos: livePos, dur: liveDur } = useAudioProgress(status);
   const progressRef = useRef<HTMLDivElement>(null);
+
+  // Personal volume — local client preference, never broadcast to the room.
+  const [volume, setVolumeState] = useState<number>(() => loadVolume());
+  const lastVolumeRef = useRef<number>(volume > 0 ? volume : 1);
+
+  const applyVolume = (v: number) => {
+    const clamped = Math.min(1, Math.max(0, v));
+    if (clamped > 0) lastVolumeRef.current = clamped;
+    getPlaybackEngine()?.setVolume(clamped);
+    saveVolume(clamped);
+    setVolumeState(clamped);
+  };
+
+  // Re-apply persisted volume when a new engine appears (track change) —
+  // slider drags only happen while the widget exists, but a fresh track
+  // remounts the engine with a fresh default.
+  useEffect(() => {
+    getPlaybackEngine()?.setVolume(volume);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volume, track?.url]);
+
+  const toggleMute = () => {
+    applyVolume(volume > 0 ? 0 : lastVolumeRef.current);
+  };
 
   const duration = liveDur || track?.duration || 0;
   const progress = duration > 0 ? Math.min(100, (livePos / duration) * 100) : 0;
@@ -108,6 +133,19 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
                 <SkipForward size={12} />
               </button>
             )}
+            <button onClick={toggleMute} aria-label={volume > 0 ? "Mute" : "Unmute"} title={volume > 0 ? "Mute" : "Unmute"} className="grid place-items-center w-6 h-6 rounded-full shrink-0" style={{ color: "var(--accent-amber)", opacity: 0.8 }}>
+              {volume > 0 ? <Volume2 size={12} /> : <VolumeX size={12} />}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(volume * 100)}
+              onChange={(e) => applyVolume(Number(e.target.value) / 100)}
+              aria-label="Volume"
+              className="w-16 h-[3px] cursor-pointer shrink-0"
+              style={{ accentColor: "var(--accent-amber)" }}
+            />
             <span className="text-[9px] opacity-60 tabular-nums">
               {duration > 0 ? `${formatRemaining(livePos * 1000)}` : "0:00"}
             </span>

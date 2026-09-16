@@ -180,6 +180,10 @@ export interface PlaybackEngine {
   currentSrc: string;
   /** Resume playback — safe to call during a user gesture. */
   play(): void;
+  /** Current volume 0–1. */
+  readonly volume: number;
+  /** Set volume 0–1. Personal preference, applies to this client only. */
+  setVolume(volume: number): void;
 }
 
 export function getEmbedEngine(): PlaybackEngine | null {
@@ -196,8 +200,14 @@ export function getPlaybackEngine(): PlaybackEngine | null {
       duration: audio.duration || 0,
       muted: audio.muted,
       currentSrc: audio.src,
+      get volume() {
+        return audio.volume;
+      },
       seekTo: (s: number) => {
         audio.currentTime = s;
+      },
+      setVolume: (v: number) => {
+        audio.volume = Math.min(1, Math.max(0, v));
       },
       play: () => {
         audio.muted = false;
@@ -222,6 +232,8 @@ type YTPlayer = {
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   getCurrentTime(): number;
   getDuration(): number;
+  getVolume(): number;
+  setVolume(volume: number): void;
   getVideoData(): { video_id?: string };
 };
 
@@ -340,8 +352,14 @@ export function YouTubePlayer() {
       get currentSrc() {
         return playerRef.current?.getVideoData().video_id ?? "";
       },
+      get volume() {
+        return playerRef.current ? playerRef.current.getVolume() / 100 : 0;
+      },
       seekTo(seconds: number) {
         playerRef.current?.seekTo(Math.max(0, seconds), true);
+      },
+      setVolume(volume: number) {
+        playerRef.current?.setVolume(Math.round(Math.min(1, Math.max(0, volume)) * 100));
       },
       play() {
         playerRef.current?.playVideo();
