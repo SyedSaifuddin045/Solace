@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { PipWindow } from "@/components/video/PipWindow";
 import { useRoomStore } from "@/lib/store";
 
-function RemoteStream({ stream }: { stream: MediaStream }) {
+function RemoteStream({ stream, mirror }: { stream: MediaStream; mirror?: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   // Presence-based init: remote tracks can arrive muted/blank at stream
@@ -39,7 +39,7 @@ function RemoteStream({ stream }: { stream: MediaStream }) {
         ref={videoRef}
         autoPlay
         playsInline
-        className={`w-full h-full object-cover ${videoActive ? "" : "hidden"}`}
+        className={`w-full h-full object-cover ${videoActive ? "" : "hidden"} ${mirror ? "-scale-x-100" : ""}`}
       />
       {!videoActive && (
         <div className="w-full h-full grid place-items-center text-[8px] opacity-60">audio only</div>
@@ -52,6 +52,8 @@ function RemoteStream({ stream }: { stream: MediaStream }) {
 export function VideoFeed({ socketId, memberName }: { socketId: string; memberName: string }) {
   const stream = useRoomStore((s) => s.remoteStreams[socketId]);
   const detached = useRoomStore((s) => s.detachedFeed?.socketId === socketId);
+  const me = useRoomStore((s) => s.socketId);
+  const mirror = socketId === me;
 
   if (detached) return null;
 
@@ -63,7 +65,7 @@ export function VideoFeed({ socketId, memberName }: { socketId: string; memberNa
       title="double-click to detach"
     >
       {stream ? (
-        <RemoteStream stream={stream} />
+        <RemoteStream stream={stream} mirror={mirror} />
       ) : (
         <div className="w-full h-full grid place-items-center text-[8px] opacity-50">connecting…</div>
       )}

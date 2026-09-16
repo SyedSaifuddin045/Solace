@@ -188,6 +188,12 @@ async function startRtcInternal({ audio, video }: { audio: boolean; video: boole
   if (video) await enableKind("video");
   else disableKind("video");
 
+  // Publish OUR OWN stream under our own socket id so the local user sees a
+  // self-preview tile; null clears it (video off → no own tile entry).
+  if (me) {
+    useRoomStore.getState().setRemoteStream(me, video ? localStream : null);
+  }
+
   const desired = { audio, video };
   s.setLocalMedia(audio, video);
   socket.emit("rtc:media", { audio, video });
@@ -310,6 +316,7 @@ export function stopRtc(): void {
   console.debug("[solace:FE] rtc stopRtc", { me, peers: peers.size, hadLocalStream: !!localStream });
   localStream?.getTracks().forEach((t) => t.stop());
   localStream = null;
+  if (me) useRoomStore.getState().setRemoteStream(me, null);
   peers.forEach((pc) => {
     pc.close();
     senders.delete(pc);
@@ -352,6 +359,7 @@ export function startSpeakingDetection(): void {
     const s = useRoomStore.getState();
     const talking: string[] = [];
     Object.entries(s.remoteStreams).forEach(([id, stream]) => {
+      if (id === me) return; // own camera/audio preview — never self-detect speaking
       if (stream.getAudioTracks().length === 0) {
         analysers.delete(id);
         return;

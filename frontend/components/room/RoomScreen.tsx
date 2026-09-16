@@ -269,8 +269,8 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
           document.body
         )}
 
-      {/* setup overlay */}
-      {setupVisible && <RoomSetupOverlay onEnter={handleSetupEnter} />}
+      {/* setup overlay — portaled, same reasoning as panels */}
+      {setupVisible && createPortal(<RoomSetupOverlay onEnter={handleSetupEnter} />, document.body)}
 
       {/* hidden playback engine (proxied audio or YouTube embed fallback) */}
       <TrackPlayback />
