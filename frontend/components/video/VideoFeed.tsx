@@ -43,6 +43,7 @@ function RemoteStream({ stream, mirror }: { stream: MediaStream; mirror?: boolea
         ref={videoRef}
         autoPlay
         playsInline
+        muted={muted}
         className={`w-full h-full object-cover ${videoActive ? "" : "hidden"} ${mirror ? "-scale-x-100" : ""}`}
       />
       {!videoActive && (
