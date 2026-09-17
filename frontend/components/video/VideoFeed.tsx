@@ -6,6 +6,10 @@ import { useRoomStore } from "@/lib/store";
 function RemoteStream({ stream, mirror }: { stream: MediaStream; mirror?: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Self-tile must never play our own audio back (echo/feedback). The camera
+  // toggle publishes the WHOLE localStream (audio tracks included when mic is
+  // on) under our own id — mute the preview so only the feed plays it.
+  const muted = mirror ?? false;
   // Presence-based init: remote tracks can arrive muted/blank at stream
   // creation — a muted track STILL has (soon-arriving) video, so show the
   // element immediately. Listeners narrow it to 'audio only' on mute/ended.
@@ -34,7 +38,7 @@ function RemoteStream({ stream, mirror }: { stream: MediaStream; mirror?: boolea
 
   return (
     <>
-      <audio ref={audioRef} autoPlay playsInline className="hidden" />
+      <audio ref={audioRef} autoPlay playsInline muted={muted} className="hidden" />
       <video
         ref={videoRef}
         autoPlay
@@ -80,13 +84,15 @@ export function VideoFeed({ socketId, memberName }: { socketId: string; memberNa
 export function DetachedVideoWindow() {
   const detachedFeed = useRoomStore((s) => s.detachedFeed);
   const stream = useRoomStore((s) => (detachedFeed ? s.remoteStreams[detachedFeed.socketId] : null));
+  const me = useRoomStore((s) => s.socketId);
 
   if (!detachedFeed) return null;
 
+  const mirror = detachedFeed.socketId === me;
   return (
     <PipWindow title={detachedFeed.title} onReDock={() => useRoomStore.getState().dockFeed()}>
       {stream ? (
-        <RemoteStream stream={stream} />
+        <RemoteStream stream={stream} mirror={mirror} />
       ) : (
         <div className="w-full h-full grid place-items-center text-[8px] opacity-50">connecting…</div>
       )}

@@ -70,6 +70,13 @@ body {
 .chrome { transition: opacity 0.6s cubic-bezier(.4,0,.2,1), transform 0.6s cubic-bezier(.4,0,.2,1); }
 .chrome-hidden { opacity: 0; pointer-events: none; transform: translateY(4px); }
 
+/* Touch devices: never inert the chrome. A hidden chrome has pointer-events
+   none, so the FIRST tap only re-reveals it and the real tap lands on the
+   wallpaper — every control needs two taps to work. Keep it visible+live. */
+@media (hover: none) {
+  .chrome-hidden { opacity: 1; pointer-events: auto; transform: none; }
+}
+
 /* song eq bars */
 .eq-bar { animation: eq 1.1s ease-in-out infinite; transform-origin: bottom; }
 @keyframes eq { 0%,100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }

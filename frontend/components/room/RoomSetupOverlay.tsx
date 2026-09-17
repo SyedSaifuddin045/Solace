@@ -15,6 +15,10 @@ export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
   const wallpapers = useRoomStore((s) => s.state.wallpapers);
   const pendingTimerMinutes = useRoomStore((s) => s.pendingTimerMinutes);
   const armTimer = useRoomStore((s) => s.armTimer);
+  // Only the creator (host) may rename. The setup overlay runs for joiners too,
+  // so hide the title input for them — emitting room:set_title as a non-host is
+  // silently rejected (NOT_HOST) and looks like a dead control.
+  const amHost = useRoomStore((s) => s.members[0]?.isHost === true && s.members[0]?.socketId === s.socketId);
 
   const [title, setTitle] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -63,17 +67,23 @@ export function RoomSetupOverlay({ onEnter }: { onEnter: () => void }) {
       />
 
       <div className="glass rounded-2xl px-8 py-7 max-w-md w-full warm-glow">
-        {/* Title */}
+        {/* Title — host only (see amHost note). Non-hosts get a read-only hint. */}
         <div className="mb-5">
           <label className="text-[10px] opacity-50 uppercase tracking-widest">title</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={60}
-            placeholder="untitled room"
-            className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none"
-            style={{ background: "rgba(20,17,15,0.4)" }}
-          />
+          {amHost ? (
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={60}
+              placeholder="untitled room"
+              className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 outline-none"
+              style={{ background: "rgba(20,17,15,0.4)" }}
+            />
+          ) : (
+            <div className="hairline rounded-lg px-3 py-2 w-full text-[12px] mt-1 opacity-60">
+              {title.trim() || "host can set a title"}
+            </div>
+          )}
         </div>
 
         {/* Wallpaper */}
