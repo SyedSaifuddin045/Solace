@@ -8,18 +8,25 @@ import { startRtc, stopRtc } from "@/lib/rtc";
 
 export type PanelKind = "chat" | "info" | "theme" | "wallpaper";
 
-function IconBtn({ label, children, active, tint, onClick }: { label: string; children: React.ReactNode; active?: boolean; tint?: string; onClick: () => void }) {
+function IconBtn({ label, children, active, tint, dot, onClick }: { label: string; children: React.ReactNode; active?: boolean; tint?: string; dot?: boolean; onClick: () => void }) {
   return (
     <button
       aria-label={label}
       onClick={onClick}
-      className="w-8 h-8 rounded-full grid place-items-center transition-colors"
+      className="relative w-8 h-8 rounded-full grid place-items-center transition-colors"
       style={{
         background: active ? "rgba(224,164,88,0.18)" : "rgba(26,22,20,0.6)",
         color: tint ?? (active ? "var(--accent-amber)" : "var(--accent-bone)"),
       }}
     >
       {children}
+      {dot && (
+        <span
+          aria-hidden
+          className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full"
+          style={{ background: "var(--accent-amber)", boxShadow: "0 0 0 1.5px rgba(26,22,20,0.9)" }}
+        />
+      )}
     </button>
   );
 }
@@ -93,12 +100,13 @@ export function MediaControls() {
 }
 
 export function ControlsCluster({ activePanel, onOpenPanel }: { activePanel: PanelKind | "none"; onOpenPanel: (panel: PanelKind) => void }) {
+  const chatUnread = useRoomStore((s) => s.chatUnread);
   return (
     <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
         <div className="glass rounded-full p-1.5 flex items-center gap-1.5">
           <IconBtn label="Wallpaper scene" onClick={() => onOpenPanel("wallpaper")} active={activePanel === "wallpaper"}><ImageIcon size={14} strokeWidth={1.8} /></IconBtn>
           <IconBtn label="Theme" onClick={() => onOpenPanel("theme")} active={activePanel === "theme"}><Settings size={14} strokeWidth={1.8} /></IconBtn>
-          <IconBtn label="Chat & activity" onClick={() => onOpenPanel("chat")} active={activePanel === "chat"}><MessageSquare size={14} strokeWidth={1.8} /></IconBtn>
+          <IconBtn label="Chat & activity" onClick={() => onOpenPanel("chat")} active={activePanel === "chat"} dot={chatUnread > 0 && activePanel !== "chat"}><MessageSquare size={14} strokeWidth={1.8} /></IconBtn>
           <IconBtn label="Room info" onClick={() => onOpenPanel("info")} active={activePanel === "info"}><Info size={14} strokeWidth={1.8} /></IconBtn>
         </div>
     </div>

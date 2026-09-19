@@ -55,6 +55,8 @@ interface RoomStore {
   remoteStreams: Record<string, MediaStream>;
   detachedFeed: { socketId: string; title: string } | null;
   pendingTimerMinutes: number | null;
+  /** Unread incoming chat count — shown as a dot on the chat button. */
+  chatUnread: number;
   setConnected: (v: boolean) => void;
   setSocketId: (id: string | null) => void;
   setSpeaking: (ids: string[]) => void;
@@ -66,6 +68,8 @@ interface RoomStore {
   armTimer: (minutes: number | null) => void;
   clearError: () => void;
   reset: () => void;
+  bumpChatUnread: () => void;
+  clearChatUnread: () => void;
   applyEvent: (name: string, payload: unknown) => void;
 }
 
@@ -111,6 +115,7 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   remoteStreams: {},
   detachedFeed: null,
   pendingTimerMinutes: null,
+  chatUnread: 0,
   setConnected: (v) => set({ connected: v }),
   setSocketId: (id) => set({ socketId: id }),
   setSpeaking: (ids) => set({ speaking: ids }),
@@ -127,7 +132,9 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   dockFeed: () => set({ detachedFeed: null }),
   armTimer: (minutes) => set({ pendingTimerMinutes: minutes }),
   clearError: () => set({ error: null }),
-  reset: () => set({ roomId: null, members: [], state: EMPTY_STATE, error: null, speaking: [], audioOnLocal: false, videoOnLocal: false, remoteStreams: {}, detachedFeed: null, pendingTimerMinutes: null }),
+  reset: () => set({ roomId: null, members: [], state: EMPTY_STATE, error: null, speaking: [], audioOnLocal: false, videoOnLocal: false, remoteStreams: {}, detachedFeed: null, pendingTimerMinutes: null, chatUnread: 0 }),
+  bumpChatUnread: () => set((s) => ({ chatUnread: s.chatUnread + 1 })),
+  clearChatUnread: () => set({ chatUnread: 0 }),
 
   applyEvent: (name, payload) => {
     const s = get();
