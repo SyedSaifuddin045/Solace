@@ -627,6 +627,21 @@ describe("RoomService", () => {
         });
     });
 
+    describe("refreshTrack injection", () => {
+        test("stores deps.refreshTrack when provided", () => {
+            const rt = async () => ({ url: "http://x" });
+            const s = new RoomService(freshStore(), null, { refreshTrack: rt });
+            assert.equal(s.refreshTrack, rt);
+        });
+
+        test("refreshTrack defaults to null (backward compatible constructor)", () => {
+            const s = new RoomService(freshStore());
+            assert.equal(s.refreshTrack, null);
+            const s2 = new RoomService(freshStore(), {});
+            assert.equal(s2.refreshTrack, null);
+        });
+    });
+
     describe("getRoom", () => {
         test("returns the room for an existing roomId", () => {
             const { roomId, room } = service.createRoom("H", socketId);

@@ -144,6 +144,85 @@ test("playback:set_track -> stays paused", async () => {
     assert.equal(ps.status, "paused");
 });
 
+describe("playback refresh (stale audioUrl rotation)", () => {
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const STALE_YT = {
+        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        title: "Stale Song",
+        artist: "Old Artist",
+        provider: "youtube",
+        audioUrl: "https://stale.example/old.m4a",
+    };
+    const FRESH_URL = "https://fresh.example/extracted-9.m4a";
+
+    function bootWithRefresh(refreshImpl) {
+        return boot().then(({ server, port, io }) => {
+            server.socketServer.roomService.refreshTrack = refreshImpl;
+            return { server, port, io };
+        });
+    }
+
+    test("playback:play re-broadcasts a FRESH track when refreshTrack rotates the audioUrl", async () => {
+        const { port } = await bootWithRefresh(async (track) => ({ ...track, audioUrl: FRESH_URL }));
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const { client: guest } = await joinRoom(port, roomId, "Guest");
+
+        const staleP = waitForEvent(guest, "playback:state", (p) => p.status === "playing" && p.track && p.track.audioUrl === STALE_YT.audioUrl);
+        const freshP = waitForEvent(guest, "playback:state", (p) => p.track && p.track.audioUrl === FRESH_URL);
+        host.emit("playback:play", { track: STALE_YT });
+        const stale = await staleP;
+        assert.equal(stale.position, 0);
+        assert.equal(stale.updatedAt > 0, true);
+        const fresh = await freshP;
+        assert.equal(fresh.track.audioUrl, FRESH_URL, "clients must hot-swap to the fresh audioUrl");
+        assert.equal(fresh.track.url, STALE_YT.url, "track identity preserved through refresh");
+        assert.equal(fresh.status, "playing");
+    });
+
+    test("playback:skip re-broadcasts a FRESH track when the skipped queue head refreshes", async () => {
+        const { port } = await bootWithRefresh(async (track) => ({ ...track, audioUrl: FRESH_URL }));
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const { client: guest } = await joinRoom(port, roomId, "Guest");
+
+        host.emit("playback:queue_add", { track: STALE_YT });
+        await waitForEvent(host, "playback:queue_state", (p) => p.queue.length === 1);
+
+        const freshP = waitForEvent(guest, "playback:state", (p) => p.track && p.track.audioUrl === FRESH_URL);
+        host.emit("playback:skip");
+        const fresh = await freshP;
+        assert.equal(fresh.track.audioUrl, FRESH_URL);
+        assert.equal(fresh.status, "playing");
+    });
+
+    test("refresh rejection keeps the single original broadcast and never crashes", async () => {
+        const { port } = await bootWithRefresh(async () => { throw new Error("yt-dlp down"); });
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const { client: guest } = await joinRoom(port, roomId, "Guest");
+
+        let stateCount = 0;
+        guest.on("playback:state", () => { stateCount += 1; });
+        host.emit("playback:play", { track: STALE_YT });
+        await waitForEvent(guest, "playback:state", (p) => p.status === "playing");
+        await wait(250);
+        assert.equal(stateCount, 1, "no re-broadcast after refresh failure");
+        assert.equal(host.connected, true, "refresh failure must not disconnect anyone");
+        assert.equal(guest.connected, true);
+    });
+
+    test("refresh that returns the SAME audioUrl does not re-broadcast", async () => {
+        const { port } = await bootWithRefresh(async (track) => ({ ...track, audioUrl: track.audioUrl }));
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const { client: guest } = await joinRoom(port, roomId, "Guest");
+
+        let stateCount = 0;
+        guest.on("playback:state", () => { stateCount += 1; });
+        host.emit("playback:play", { track: STALE_YT });
+        await waitForEvent(guest, "playback:state", (p) => p.status === "playing");
+        await wait(250);
+        assert.equal(stateCount, 1, "identical audioUrl must not trigger a rebroadcast");
+    });
+});
+
 test("auto-advance: both members emit same advance -> single pop, no skip", async () => {
     const { port } = await boot();
     const { client: host, roomId } = await createRoom(port, "Host");

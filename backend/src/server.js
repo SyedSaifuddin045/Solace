@@ -8,6 +8,7 @@ const MemoryRoomStore = require("./rooms/MemoryRoomStore");
 const RoomService = require("./rooms/RoomService");
 const { createUploadRouter } = require("./upload/uploadRouter");
 const { createTrackRouter } = require("./track/trackRouter");
+const { refreshTrack } = require("./track/resolve");
 
 function createHttpServer() {
     const app = express();
@@ -15,7 +16,7 @@ function createHttpServer() {
     // express-rate-limit needs trust proxy to avoid ValidationError spam and
     // mis-identifying users (one hop: traefik).
     app.set("trust proxy", 1);
-    const roomService = new RoomService(MemoryRoomStore);
+    const roomService = new RoomService(MemoryRoomStore, null, { refreshTrack });
 
     // Security headers (CSP relaxed for inline theme script; X-Frame denied; nosniff)
     app.use(helmet({

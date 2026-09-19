@@ -43,6 +43,38 @@ function createPlaybackHandler(io, roomService) {
         io.to(room.id).emit(SERVER.PLAYBACK_QUEUE_STATE, { queue });
     }
 
+    // Best-effort refresh of a just-started YouTube track. The audioUrl in
+    // room state may be a stale signed googlevideo URL captured at add/queue
+    // time — YouTube lets it expire within minutes, turning the stream into a
+    // 403/502 and flipping clients to the embed fallback. Re-extract fresh on
+    // the way out and hot-swap every client to the new URL when it differs
+    // (the frontend AudioPlayer reloads on src change). NEVER blocks the
+    // original broadcast (that fires immediately); ANY failure here logs and
+    // keeps the state already on the wire.
+    async function refreshTrackBroadcast(room, change, socket) {
+        try {
+            if (!roomService.refreshTrack) return;
+            const track = change.track;
+            if (!track || !track.url) return;
+            if (room.members.size === 0) return;
+            const refreshed = await roomService.refreshTrack(track);
+            if (!refreshed || !refreshed.url) return;
+            if (refreshed.audioUrl === track.audioUrl) return;
+            const { room: updatedRoom } = roomService.setPlayback(room.id, socket.id, {
+                status: "playing",
+                track: refreshed,
+                position: 0,
+            });
+            broadcast(updatedRoom, { ...change, track: refreshed }, socket.id);
+        } catch (err) {
+            console.log("[solace:BE] playback refresh failed — keeping original broadcast", {
+                roomId: room && room.id,
+                error: err.message,
+                code: err.code,
+            });
+        }
+    }
+
     return {
         handlePlay(socket, payload) {
             const room = assertRoom(socket);
@@ -55,6 +87,7 @@ function createPlaybackHandler(io, roomService) {
                 // queue in lockstep with the atomically-popped canonical queue.
                 if (popped) broadcastQueue(updatedRoom, queue);
                 appendActivity(updatedRoom, socket, change.track ? `played ${change.track.url}` : "played");
+                refreshTrackBroadcast(updatedRoom, change, socket);
             } catch (err) {
                 emitError(socket, err);
             }
@@ -152,6 +185,7 @@ function createPlaybackHandler(io, roomService) {
                 broadcast(updatedRoom, change, socket.id);
                 broadcastQueue(updatedRoom, queue);
                 appendActivity(updatedRoom, socket, change.track ? `skipped to ${change.track.url}` : "skip (queue empty)");
+                refreshTrackBroadcast(updatedRoom, change, socket);
             } catch (err) {
                 emitError(socket, err);
             }
