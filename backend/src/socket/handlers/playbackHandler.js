@@ -1,5 +1,13 @@
 const { SERVER } = require("../events");
 
+// Every member fires playback:play on the same track end, so an advance into
+// a youtube track would otherwise run one full yt-dlp extraction PER member
+// (up to 4 concurrent processes) plus identical rebroadcasts. Park the in-flight
+// refresh promise per room+track key — the first caller wins, the rest skip.
+// Keys are deleted in `finally`, so repeated picks of the same url still
+// refresh fresh each time.
+const refreshInFlight = new Map();
+
 function createPlaybackHandler(io, roomService) {
     function emitError(socket, err) {
         socket.emit(SERVER.ROOM_ERROR, { code: err.code, message: err.message });
@@ -57,15 +65,40 @@ function createPlaybackHandler(io, roomService) {
             const track = change.track;
             if (!track || !track.url) return;
             if (room.members.size === 0) return;
-            const refreshed = await roomService.refreshTrack(track);
-            if (!refreshed || !refreshed.url) return;
-            if (refreshed.audioUrl === track.audioUrl) return;
-            const { room: updatedRoom } = roomService.setPlayback(room.id, socket.id, {
-                status: "playing",
-                track: refreshed,
-                position: 0,
-            });
-            broadcast(updatedRoom, { ...change, track: refreshed }, socket.id);
+            const key = `${room.id}:${track.url}`;
+            if (refreshInFlight.has(key)) return;
+            const pending = (async () => {
+                const refreshed = await roomService.refreshTrack(track);
+                // Post-await guard: extraction takes seconds — a member may have
+                // skipped/paused/cleared the track while it was in flight. Only
+                // hot-swap when ALL hold: the refreshed track is still the CURRENT
+                // room track, the room is still playing, and the fresh audioUrl
+                // actually differs from the canonical room track (not the captured
+                // `change.track`, whose url/audioUrl may differ across members).
+                // Any mismatch aborts silently — the interleaved action's
+                // broadcast is authoritative and must win.
+                const current = room.state && room.state.playback;
+                if (!current || !current.track) return;
+                if (current.track.url !== track.url) return;
+                if (current.status !== "playing") return;
+                if (!refreshed || !refreshed.url) return;
+                if (refreshed.audioUrl === current.track.audioUrl) return;
+                const { room: updatedRoom, change: refreshedChange } = roomService.setPlayback(room.id, socket.id, {
+                    status: "playing",
+                    track: refreshed,
+                    position: 0,
+                });
+                // Broadcast the change setPlayback actually stored (fresh
+                // position/updatedAt) so late joiners anchor to the refreshed
+                // clock instead of the original broadcast's stale one.
+                broadcast(updatedRoom, refreshedChange, socket.id);
+            })();
+            refreshInFlight.set(key, pending);
+            try {
+                await pending;
+            } finally {
+                refreshInFlight.delete(key);
+            }
         } catch (err) {
             console.log("[solace:BE] playback refresh failed — keeping original broadcast", {
                 roomId: room && room.id,

@@ -1,6 +1,6 @@
 "use client";
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
-import { useRoomStore } from "@/lib/store";
+import { useRoomStore, type Track } from "@/lib/store";
 import { BACKEND_URL } from "@/lib/socket";
 import { extractYouTubeId } from "@/lib/youtube";
 import { loadVolume } from "@/lib/volume";
@@ -500,9 +500,21 @@ export function YouTubePlayer() {
  */
 export function TrackPlayback() {
   const track = useRoomStore((s) => s.state.playback.track);
+  const trackUrl = track?.url ?? null;
+
+  // Key the engine subtree by current track url so ANY url transition (incl. a
+  // pass through null) fully re-mounts with a fresh fallback latch. Without
+  // this, a stale `.active` would survive a track → null → SAME url re-pick and
+  // snap the re-picked song straight to the embed with no fresh stream attempt.
+  // Remounting on a truly NEW url is also always correct: the new track has no
+  // error history yet. Re-broadcasts of the SAME url keep the key and preserve
+  // the latch (same url + same audioUrl stays embed; a fresh audioUrl yields).
+  return <TrackEngine key={trackUrl ?? "no-track"} track={track} trackUrl={trackUrl} />;
+}
+
+function TrackEngine({ track, trackUrl }: { track: Track | null; trackUrl: string | null }) {
   const [fallback, setFallback] = useState<{ url: string; audioUrl: string | null; active: boolean } | null>(null);
 
-  const trackUrl = track?.url ?? null;
   const videoId = track ? extractYouTubeId(track.url) : null;
 
   // Per-track runtime fallback: only counts while the SAME url is current, so

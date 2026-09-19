@@ -125,6 +125,39 @@ describe("TrackPlayback per-client mode + fallback self-heal + YT teardown", () 
     expect((window as any).__solaceAudio).toBeUndefined();
   });
 
+  it("C5: track cleared then re-picked with the SAME url+audioUrl clears the stale fallback latch", async () => {
+    setTrack({ url: YT_URL, audioUrl: "https://stream.example/a1.mp3" });
+    render(<TrackPlayback />);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((window as any).__solaceAudio).toBeTruthy();
+
+    // first run fails the stream → embed fallback for this url+audioUrl
+    act(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__solaceAudio.dispatchEvent(new Event("error"));
+    });
+    await waitFor(() => expect(FakePlayer.instances).toHaveLength(1));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((window as any).__solaceEmbed).toBeTruthy();
+
+    // track goes null (session ended / cleared) → embed torn down
+    setTrack(null, "paused");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((window as any).__solaceEmbed).toBeUndefined();
+
+    // MUCH later the SAME url + SAME audioUrl is re-picked — the stale latch
+    // must be gone, so the stream is attempted fresh (not snapped to embed).
+    setTrack({ url: YT_URL, title: "re-picked", audioUrl: "https://stream.example/a1.mp3" });
+    await waitFor(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((window as any).__solaceAudio).toBeTruthy();
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((window as any).__solaceEmbed).toBeUndefined();
+    expect(FakePlayer.instances).toHaveLength(1);
+    expect(document.querySelector('div[aria-hidden="true"]')).toBeNull();
+  });
+
   it("D5: unmounting the YouTube player destroys the YT.Player instance (kills ghost audio)", async () => {
     setTrack({ url: YT_URL });
     const { unmount } = render(<TrackPlayback />);

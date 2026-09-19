@@ -221,6 +221,73 @@ describe("playback refresh (stale audioUrl rotation)", () => {
         await wait(250);
         assert.equal(stateCount, 1, "identical audioUrl must not trigger a rebroadcast");
     });
+
+    // Race coverage: a refresh takes seconds (real yt-dlp) — the room can move
+    // on before it resolves. A refresh that resolves AFTER a skip/pause has
+    // superseded the track must NOT clobber the newer state back to the OLD
+    // refreshed track (fix: post-await guard comparing against the CURRENT
+    // room playback).
+    test("a refresh resolving mid-skip does NOT clobber the superseding track", async () => {
+        const pendingResolvers = [];
+        const refreshImpl = (track) => {
+            if (pendingResolvers.length === 0) return new Promise((resolve) => pendingResolvers.push(resolve));
+            return Promise.resolve(track);
+        };
+        const { port } = await bootWithRefresh(refreshImpl);
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const { client: guest } = await joinRoom(port, roomId, "Guest");
+
+        const NEXT_TRACK = { url: "http://track/next", title: "Next", provider: "youtube" };
+        host.emit("playback:queue_add", { track: STALE_YT });
+        host.emit("playback:queue_add", { track: NEXT_TRACK });
+        await waitForEvent(host, "playback:queue_state", (p) => p.queue.length === 2);
+
+        // Advance into the stale youtube track — its refresh now hangs in flight.
+        host.emit("playback:skip");
+        await waitForEvent(guest, "playback:state", (p) => p.status === "playing" && p.track && p.track.url === STALE_YT.url);
+
+        // Skip again before the extraction resolves — playback must move on.
+        host.emit("playback:skip");
+        await waitForEvent(guest, "playback:state", (p) => p.track && p.track.url === NEXT_TRACK.url);
+        assert.equal(pendingResolvers.length, 1, "only the first track's refresh is held open");
+
+        // Let the ORIGINAL (now stale) refresh resolve with a fresh audioUrl.
+        const relivedBroadcasts = [];
+        guest.on("playback:state", (p) => relivedBroadcasts.push(p));
+        pendingResolvers[0]({ ...STALE_YT, audioUrl: FRESH_URL });
+        await wait(250);
+        assert.equal(relivedBroadcasts.length, 0, "stale refresh must not re-broadcast a superseded track");
+
+        // Canonical room state still holds the skipped-to track (not the OLD one).
+        const snapPromise = waitForEvent(guest, "room:joined", (p) => p.state && p.state.playback && p.state.playback.track);
+        guest.emit("room:get_state");
+        const snap = await snapPromise;
+        assert.equal(snap.state.playback.track.url, NEXT_TRACK.url);
+        assert.equal(snap.state.playback.status, "playing");
+    });
+
+    // Every member fires playback:play on the same track end — without a
+    // shared in-flight dedup each member spawns its own yt-dlp extraction and
+    // emits an identical rebroadcast (fix: park the promise per room+track key).
+    test("concurrent advances for the same room+track share ONE refresh extraction", async () => {
+        let refreshCalls = 0;
+        const { port } = await bootWithRefresh(async (track) => {
+            refreshCalls += 1;
+            await wait(30);
+            return { ...track, audioUrl: FRESH_URL };
+        });
+        const { client: host, roomId } = await createRoom(port, "Host");
+        const { client: guest } = await joinRoom(port, roomId, "Guest");
+
+        const advance = { track: STALE_YT };
+        const freshP = waitForEvent(guest, "playback:state", (p) => p.track && p.track.audioUrl === FRESH_URL);
+        host.emit("playback:play", advance);
+        guest.emit("playback:play", advance);
+        const fresh = await freshP;
+        assert.equal(fresh.track.url, STALE_YT.url);
+        await wait(150);
+        assert.equal(refreshCalls, 1, "a single extraction per room+track must serve every member");
+    });
 });
 
 test("auto-advance: both members emit same advance -> single pop, no skip", async () => {
