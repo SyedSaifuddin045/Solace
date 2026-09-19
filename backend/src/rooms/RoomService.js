@@ -276,6 +276,46 @@ class RoomService {
         return { room, change };
     }
 
+    /**
+     * Auto-advance path: play a track and, WHEN the supplied track is exactly
+     * the current queue head, atomically consume (pop) it from the queue.
+     *
+     * Every member fires this on `ended` (they all observe the same end), so
+     * without a guard the queue gets popped once per member. Matching against
+     * the queue head makes the pop idempotent: the first member's advance
+     * consumes the head, the second member's identical advance finds a new
+     * head and only (re)plays the same track.
+     *
+     * A plain "play now" (track not in queue, or no track) behaves exactly
+     * like setPlayback — no queue mutation, queue untouched.
+     */
+    advancePlay(roomId, socketId, { track }) {
+        const room = this._assertRoom(roomId);
+        this._assertMember(room, socketId);
+
+        if (track !== undefined && track !== null) {
+            if (typeof track !== "object" || typeof track.url !== "string") {
+                throw new InvalidPayloadError("track must be null or an object with a url string");
+            }
+            if (trackObjectSize(track) > MAX_TRACK_OBJECT_BYTES) {
+                throw new InvalidPayloadError(`track object must not exceed ${MAX_TRACK_OBJECT_BYTES} bytes`);
+            }
+        }
+
+        const queue = room.state.queue;
+        const popped = !!track && queue.length > 0 && queue[0].url === track.url;
+        if (popped) queue.splice(0, 1);
+
+        const change = {
+            status: "playing",
+            track: track !== undefined ? track : room.state.playback.track,
+            position: track ? 0 : room.state.playback.position,
+            updatedAt: Date.now()
+        };
+        room.state.playback = change;
+        return { room, change, queue, popped };
+    }
+
     addToQueue(roomId, socketId, track) {
         const room = this._assertRoom(roomId);
         this._assertMember(room, socketId);

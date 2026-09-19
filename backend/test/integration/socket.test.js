@@ -144,6 +144,33 @@ test("playback:set_track -> stays paused", async () => {
     assert.equal(ps.status, "paused");
 });
 
+test("auto-advance: both members emit same advance -> single pop, no skip", async () => {
+    const { port } = await boot();
+    const { client: host, roomId } = await createRoom(port, "Host");
+    const { client: guest } = await joinRoom(port, roomId, "Guest");
+
+    host.emit("playback:queue_add", { track: { url: "http://q/a" } });
+    host.emit("playback:queue_add", { track: { url: "http://q/b" } });
+    await waitForEvent(host, "playback:queue_state", (p) => p.queue.length === 2);
+
+    // Song ends — BOTH members observe the same head and fire the same advance
+    // (pre-fix: this double-popped the queue -> skip-ahead + room:error storm).
+    const advance = { track: { url: "http://q/a" } };
+    host.emit("playback:play", advance);
+    guest.emit("playback:play", advance);
+
+    const statePromise = waitForEvent(guest, "playback:state", (p) => p.status === "playing");
+    const state = await statePromise;
+    assert.equal(state.track.url, "http://q/a");
+    assert.equal(state.position, 0);
+
+    // Queue must lose exactly one entry (head), regardless of which client wins.
+    const snapPromise = waitForEvent(host, "room:joined", (p) => p.state && p.state.queue);
+    host.emit("room:get_state");
+    const snap = await snapPromise;
+    assert.deepEqual(snap.state.queue.map((t) => t.url), ["http://q/b"]);
+});
+
 test("5th client join -> room:error ROOM_FULL", async () => {
     const { port } = await boot();
     await createRoom(port, "Host");

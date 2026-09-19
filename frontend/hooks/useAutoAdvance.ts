@@ -9,12 +9,12 @@ export function useAutoAdvance() {
   const queue = useRoomStore((s) => s.state.queue);
   const advancedRef = useRef(false);
 
-  // Auto-play from queue when no track is playing
+  // Auto-play from queue when no track is playing. Single atomic advance:
+  // server consumes queue[0] only when it matches this exact track, so N
+  // members firing the same advance dedupe instead of popping N entries.
   useEffect(() => {
     if (status !== "playing" && !track && queue.length > 0) {
-      getSocket().emit("playback:set_track", { track: queue[0] });
-      getSocket().emit("playback:queue_remove", { index: 0 });
-      getSocket().emit("playback:play");
+      getSocket().emit("playback:play", { track: queue[0] });
     }
   }, [status, track, queue]);
 
@@ -32,9 +32,10 @@ export function useAutoAdvance() {
       advancedRef.current = true;
       const q = useRoomStore.getState().state.queue;
       if (q.length > 0) {
-        getSocket().emit("playback:set_track", { track: q[0] });
-        getSocket().emit("playback:queue_remove", { index: 0 });
-        getSocket().emit("playback:play");
+        // Single atomic advance (see server advancePlay): pops queue[0] only
+        // when it matches this track; duplicate advances from other members
+        // are no-ops instead of a second queue pop / stale-index error.
+        getSocket().emit("playback:play", { track: q[0] });
       } else {
         // Pause WITH the real end position — a bare `playback:pause` leaves
         // the canonical position at its last snapshot (often 0 for a long

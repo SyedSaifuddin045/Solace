@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { useRoomStore } from "@/lib/store";
 import { BACKEND_URL } from "@/lib/socket";
 import { extractYouTubeId } from "@/lib/youtube";
+import { loadVolume } from "@/lib/volume";
 import { pushToast } from "@/components/room/ToastStack";
 
 /**
@@ -23,6 +24,7 @@ export function AudioPlayer({ onStreamError }: { onStreamError?: () => void }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastStatusRef = useRef<string>("");
   const failedRef = useRef(false);
+  const freshSeekRef = useRef(false);
   const unlockCleanupRef = useRef<(() => void) | null>(null);
 
   // Autoplay policy: unmuted play() outside a user gesture is rejected
@@ -70,6 +72,10 @@ export function AudioPlayer({ onStreamError }: { onStreamError?: () => void }) {
   // Create audio element on mount
   useEffect(() => {
     const audio = new Audio();
+    // Personal persisted volume — a fresh element defaults to 1, so apply
+    // it here instead of depending on SongWidget's effect ordering (it
+    // mounts before this engine and never re-runs when the engine appears).
+    audio.volume = loadVolume();
     audio.preload = "auto";
     audioRef.current = audio;
 
@@ -111,6 +117,9 @@ export function AudioPlayer({ onStreamError }: { onStreamError?: () => void }) {
     if (audio.src !== audioUrl) {
       audio.src = audioUrl;
       audio.load();
+      // A freshly-assigned src has no meaningful position — mark it so the
+      // sync effect positions it to the room target unconditionally.
+      freshSeekRef.current = true;
       // New track while status playing — resume playback after src swap
       if (status === "playing") {
         playWithUnlock(audio, "audio autoplay blocked");
@@ -142,8 +151,15 @@ export function AudioPlayer({ onStreamError }: { onStreamError?: () => void }) {
       // Always recalculate target position on play/seek
       const elapsed = (Date.now() - updatedAt) / 1000;
       const targetTime = Math.max(0, position + elapsed);
-      if (Math.abs(audio.currentTime - targetTime) > 2) {
+      // A freshly-loaded element always needs positioning, even when the room
+      // is within 2s of the broadcast anchor — a fresh element's currentTime
+      // is 0 regardless. Without this, a JOINING client skips the first seek
+      // and plays from 0 while the room advances; the sync effect only re-runs
+      // on explicit playback events, so the desync persists.
+      const justLoaded = freshSeekRef.current;
+      if (justLoaded || Math.abs(audio.currentTime - targetTime) > 2) {
         audio.currentTime = targetTime;
+        freshSeekRef.current = false;
       }
       if (lastStatusRef.current !== "play") {
         lastStatusRef.current = "play";
@@ -152,8 +168,10 @@ export function AudioPlayer({ onStreamError }: { onStreamError?: () => void }) {
     } else {
       // Paused — always sync position
       const targetTime = Math.max(0, position);
-      if (Math.abs(audio.currentTime - targetTime) > 2) {
+      const justLoaded = freshSeekRef.current;
+      if (justLoaded || Math.abs(audio.currentTime - targetTime) > 2) {
         audio.currentTime = targetTime;
+        freshSeekRef.current = false;
       }
       if (lastStatusRef.current !== "pause") {
         lastStatusRef.current = "pause";
@@ -263,6 +281,7 @@ export function YouTubePlayer() {
   const playerRef = useRef<YTPlayer | null>(null);
   const lastStatusRef = useRef<string>("");
   const lastVideoIdRef = useRef<string | null>(null);
+  const freshSeekRef = useRef(false);
   const statusRef = useRef(status);
   const positionRef = useRef(position);
   const updatedAtRef = useRef(updatedAt);
@@ -274,7 +293,18 @@ export function YouTubePlayer() {
   // double-ready races) whose methods are missing. Guard every call.
   const safePlayer = (): YTPlayer | null => {
     const p = playerRef.current;
-    return p && typeof p.getCurrentTime === "function" && typeof p.playVideo === "function" ? p : null;
+    return p &&
+      typeof p.getCurrentTime === "function" &&
+      typeof p.getDuration === "function" &&
+      typeof p.playVideo === "function" &&
+      typeof p.pauseVideo === "function" &&
+      typeof p.loadVideoById === "function" &&
+      typeof p.seekTo === "function" &&
+      typeof p.getVideoData === "function" &&
+      typeof p.getVolume === "function" &&
+      typeof p.setVolume === "function"
+      ? p
+      : null;
   };
 
   const applyState = () => {
@@ -285,9 +315,13 @@ export function YouTubePlayer() {
       if (statusRef.current === "playing") {
         const elapsed = (Date.now() - updatedAtRef.current) / 1000;
         const targetTime = Math.max(0, positionRef.current + elapsed);
+        // Fresh embed players (join / new video) have no meaningful position
+        // yet — always seek to target, even when it's < 2s or > 600s off.
+        const justLoaded = freshSeekRef.current;
         const diff = Math.abs(player.getCurrentTime() - targetTime);
-        if (diff > 2 && diff < 600) {
+        if ((justLoaded || diff > 2) && (justLoaded || diff < 600)) {
           player.seekTo(targetTime, true);
+          freshSeekRef.current = false;
         }
         if (lastStatusRef.current !== "play") {
           lastStatusRef.current = "play";
@@ -295,9 +329,11 @@ export function YouTubePlayer() {
         }
       } else {
         const targetTime = Math.max(0, positionRef.current);
+        const justLoaded = freshSeekRef.current;
         const diff = Math.abs(player.getCurrentTime() - targetTime);
-        if (diff > 2 && diff < 600) {
+        if ((justLoaded || diff > 2) && (justLoaded || diff < 600)) {
           player.seekTo(targetTime, true);
+          freshSeekRef.current = false;
         }
         if (lastStatusRef.current !== "pause") {
           lastStatusRef.current = "pause";
@@ -323,26 +359,41 @@ export function YouTubePlayer() {
       if (cancelled || !containerRef.current) return;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const YT = (window as any).YT;
-      playerRef.current = YT.Player ? new YT.Player(containerRef.current, {
-        height: "1",
-        width: "1",
-        playerVars: { playsinline: 1, controls: 0 },
-        events: {
-          onReady: () => {
-            const p = safePlayer();
-            if (!p) return;
-            if (lastVideoIdRef.current) p.loadVideoById(lastVideoIdRef.current);
-            applyState();
+      try {
+        playerRef.current = YT.Player ? new YT.Player(containerRef.current, {
+          height: "1",
+          width: "1",
+          playerVars: { playsinline: 1, controls: 0 },
+          events: {
+            onReady: () => {
+              try {
+                const p = safePlayer();
+                if (!p) return;
+                // Fresh player defaults to 100 — apply persisted volume now that
+                // the iframe is usable (SongWidget mounted before this engine).
+                p.setVolume(Math.round(loadVolume() * 100));
+                // Player just spawned with no position — force the room target.
+                freshSeekRef.current = true;
+                if (lastVideoIdRef.current) p.loadVideoById(lastVideoIdRef.current);
+                applyState();
+              } catch {
+                // degraded embed — nothing to sync, stay silent
+              }
+            },
+            onStateChange: (e: { data: number }) => {
+              // YT.PlayerState.ENDED === 0 — signal auto-advance (mirrors the
+              // audio element's `ended` event that useAutoAdvance listens for).
+              if (e.data === 0) {
+                window.dispatchEvent(new CustomEvent("solace:track-ended"));
+              }
+            },
           },
-          onStateChange: (e: { data: number }) => {
-            // YT.PlayerState.ENDED === 0 — signal auto-advance (mirrors the
-            // audio element's `ended` event that useAutoAdvance listens for).
-            if (e.data === 0) {
-              window.dispatchEvent(new CustomEvent("solace:track-ended"));
-            }
-          },
-        },
-      }) : null;
+        }) : null;
+      } catch {
+        // A constructor throw (blocked iframe, adblocker, CSP) must never
+        // become an unhandled rejection that takes down the room UI.
+        playerRef.current = null;
+      }
     });
     return () => {
       cancelled = true;
@@ -384,16 +435,18 @@ export function YouTubePlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Video id changed → load the new video, then re-apply state
+// Video id changed → load the new video, then re-apply state
   useEffect(() => {
     if (!videoId) return;
     const player = safePlayer();
     if (lastVideoIdRef.current !== videoId) {
       lastVideoIdRef.current = videoId;
+      // New video in the player — no meaningful position until it's sought.
+      freshSeekRef.current = true;
       if (player) player.loadVideoById(videoId);
     }
     applyState();
-     
+      
   }, [videoId]);
 
   // Sync play/pause/seek with store
@@ -447,4 +500,32 @@ export function TrackPlayback() {
       }
     />
   );
+}
+
+/**
+ * Isolates the playback engine from the rest of the room UI.
+ *
+ * A throw anywhere in the engine subtree (a hostile YT embed, a media element
+ * quirk mid-track-swap) would otherwise unmount the ENTIRE React root — there
+ * is no boundary above RoomScreen — which runs RoomScreen's cleanup and calls
+ * stopRtc(): local mic/cam tracks are stopped and every peer connection is
+ * closed. That is how a song change "kills the mic/video transmission".
+ * The boundary caps the blast radius to silence instead.
+ */
+export class PlaybackBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, _info: ErrorInfo): void {
+    console.debug("[solace:FE] playback engine crashed — engine isolated, room UI + RTC preserved", {
+      message: error?.message,
+    });
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
 }

@@ -732,6 +732,71 @@ describe("RoomService", () => {
         });
     });
 
+    describe("advancePlay (auto-advance dedupe)", () => {
+        let roomId;
+
+        beforeEach(() => {
+            const result = service.createRoom("Host", socketId);
+            roomId = result.roomId;
+        });
+
+        test("plays matching queue head and pops it atomically", () => {
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            service.addToQueue(roomId, socketId, { url: "https://b.com" });
+            const { change, queue, popped } = service.advancePlay(roomId, socketId, { track: { url: "https://a.com" } });
+            assert.equal(change.status, "playing");
+            assert.equal(change.track.url, "https://a.com");
+            assert.equal(change.position, 0);
+            assert.equal(popped, true);
+            assert.deepEqual(queue.map((t) => t.url), ["https://b.com"]);
+        });
+
+        test("duplicate advance for same head is a no-op pop (idempotent)", () => {
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            service.addToQueue(roomId, socketId, { url: "https://b.com" });
+            // first member advances
+            service.advancePlay(roomId, socketId, { track: { url: "https://a.com" } });
+            // second member emits the SAME advance (its stale queue head) — must not pop again
+            const { change, queue, popped } = service.advancePlay(roomId, socketId, { track: { url: "https://a.com" } });
+            assert.equal(change.track.url, "https://a.com");
+            assert.equal(popped, false);
+            assert.deepEqual(queue.map((t) => t.url), ["https://b.com"]);
+        });
+
+        test("play-now for a track NOT in queue never pops", () => {
+            service.addToQueue(roomId, socketId, { url: "https://queued.com" });
+            const { change, queue, popped } = service.advancePlay(roomId, socketId, { track: { url: "https://other.com" } });
+            assert.equal(change.track.url, "https://other.com");
+            assert.equal(popped, false);
+            assert.deepEqual(queue.map((t) => t.url), ["https://queued.com"]);
+        });
+
+        test("bare play (resume) keeps track and leaves queue untouched", () => {
+            service.setPlayback(roomId, socketId, { status: "playing", track: { url: "https://cur.com" }, position: 42 });
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            const { change, popped } = service.advancePlay(roomId, socketId, { track: undefined });
+            assert.equal(change.track.url, "https://cur.com");
+            assert.equal(popped, false);
+        });
+
+        test("advancePlay rejects invalid track", () => {
+            assert.throws(() => service.advancePlay(roomId, socketId, { track: { url: 123 } }), InvalidPayloadError);
+        });
+
+        test("advancePlay with explicit null clears track (never pops)", () => {
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            const { change, popped } = service.advancePlay(roomId, socketId, { track: null });
+            assert.equal(change.track, null);
+            assert.equal(change.status, "playing");
+            assert.equal(popped, false);
+        });
+
+        test("advancePlay rejects non-member", () => {
+            service.addToQueue(roomId, socketId, { url: "https://a.com" });
+            assert.throws(() => service.advancePlay(roomId, "outsider", { track: { url: "https://a.com" } }), NotInRoomError);
+        });
+    });
+
     describe("password protection", () => {
         let service;
         let store;

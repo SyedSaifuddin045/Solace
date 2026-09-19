@@ -49,12 +49,11 @@ function createPlaybackHandler(io, roomService) {
             if (!room) return;
             try {
                 const track = payload && payload.track;
-                const { room: updatedRoom, change } = roomService.setPlayback(room.id, socket.id, {
-                    status: "playing",
-                    track,
-                    ...(track ? { position: 0 } : {})
-                });
+                const { room: updatedRoom, change, queue, popped } = roomService.advancePlay(room.id, socket.id, { track });
                 broadcast(updatedRoom, change, socket.id);
+                // Auto-advance consumed the queue head — keep every member's
+                // queue in lockstep with the atomically-popped canonical queue.
+                if (popped) broadcastQueue(updatedRoom, queue);
                 appendActivity(updatedRoom, socket, change.track ? `played ${change.track.url}` : "played");
             } catch (err) {
                 emitError(socket, err);

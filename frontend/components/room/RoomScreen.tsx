@@ -27,7 +27,8 @@ import { initRtc, rebuildAfterReconnect, startSpeakingDetection, stopRtc } from 
 import { resolveAssetUrl } from "@/lib/upload";
 import { isGradientUrl, gradientCss } from "@/lib/wallpaper";
 import { useAutoAdvance } from "@/hooks/useAutoAdvance";
-import { TrackPlayback } from "@/components/room/VideoPlayer";
+import { useChatNotifications } from "@/hooks/useChatNotifications";
+import { TrackPlayback, PlaybackBoundary } from "@/components/room/VideoPlayer";
 import { DetachedVideoWindow } from "@/components/video/VideoFeed";
 
 export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
@@ -45,6 +46,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
   const [queueOpen, setQueueOpen] = useState(false);
 
   useAutoAdvance();
+  useChatNotifications(activePanel === "chat");
 
   useEffect(() => {
     // client-only mount check per spec: show setup overlay before entering
@@ -273,7 +275,7 @@ export function RoomScreen({ roomId: propRoomId }: { roomId: string }) {
       {setupVisible && createPortal(<RoomSetupOverlay onEnter={handleSetupEnter} />, document.body)}
 
       {/* hidden playback engine (proxied audio or YouTube embed fallback) */}
-      <TrackPlayback />
+      <PlaybackBoundary><TrackPlayback /></PlaybackBoundary>
 
       {/* undocked PiP video — top level, outside all idle chrome: never fades */}
       <DetachedVideoWindow />
