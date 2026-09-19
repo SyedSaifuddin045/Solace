@@ -6,6 +6,7 @@ import { getSocket } from "@/lib/socket";
 import { resolveTrack, ResolveError } from "@/lib/track";
 import { extractYouTubeId } from "@/lib/youtube";
 import { pushToast } from "@/components/room/ToastStack";
+import { MarqueeText } from "@/components/room/MarqueeText";
 
 export function TrackPicker({ onClose }: { onClose: () => void }) {
   const track = useRoomStore((s) => s.state.playback.track);
@@ -120,7 +121,7 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] truncate">{preview.title || "Unknown title"}</p>
+              <MarqueeText text={preview.title || "Unknown title"} className="text-[12px] truncate" />
               <p className="text-[10px] opacity-50 truncate">
                 {preview.artist || "Unknown artist"}
                 {preview.duration ? ` · ${formatDuration(preview.duration)}` : ""}

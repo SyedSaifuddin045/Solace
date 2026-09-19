@@ -81,6 +81,21 @@ body {
 .eq-bar { animation: eq 1.1s ease-in-out infinite; transform-origin: bottom; }
 @keyframes eq { 0%,100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
 
+/* long-title marquee — one-way loop; only applied when text overflows */
+.marquee { overflow: hidden; white-space: nowrap; text-overflow: clip; }
+.marquee-inner {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: marquee-scroll var(--marquee-duration, 14s) linear infinite;
+  will-change: transform;
+}
+.marquee-item { padding-right: 2.5rem; }
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee:hover .marquee-inner { animation-play-state: paused; }
+
 /* timer hint pulse */
 @keyframes pulse-amber {
   0%,100% { opacity: 1; box-shadow: 0 0 8px rgba(224,164,88,0.9); }
@@ -101,4 +116,5 @@ body {
   .chrome { transition: opacity 0.2s linear; transform: none; }
   .eq-bar { animation: none; }
   .pulse-amber { animation: none; }
+  .marquee-inner { animation: none; }
 }

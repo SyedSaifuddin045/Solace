@@ -6,6 +6,7 @@ import { getSocket } from "@/lib/socket";
 import { formatRemaining } from "@/lib/time";
 import { loadVolume, saveVolume } from "@/lib/volume";
 import { getPlaybackEngine } from "@/components/room/VideoPlayer";
+import { MarqueeText } from "@/components/room/MarqueeText";
 
 function useAudioProgress(status: string) {
   const [pos, setPos] = useState(0);
@@ -115,7 +116,7 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-[12px] truncate leading-tight">{displayTitle}</p>
+              <MarqueeText text={displayTitle} className="text-[12px] truncate leading-tight" />
               {displayArtist && <p className="text-[10px] opacity-50 truncate">{displayArtist}</p>}
             </div>
           </div>
@@ -179,7 +180,7 @@ export function SongWidget({ onOpenPicker, onOpenQueue }: { onOpenPicker?: () =>
             </div>
           )}
           <div>
-            <p className="text-[12px] leading-tight max-w-[180px] truncate">{displayTitle}</p>
+            <MarqueeText text={displayTitle} className="text-[12px] leading-tight max-w-[180px] truncate" />
             <p className="text-[10px] opacity-50">{duration > 0 ? formatRemaining(livePos * 1000) : ""}</p>
           </div>
           {queue.length > 0 && (
