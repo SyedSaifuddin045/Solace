@@ -132,10 +132,10 @@ jobs:
           source /tmp/cf.sh
           sleep 12
           API GET "/api/v1/applications/${{ env.uuid }}/logs?limit=100" 2>/dev/null > /tmp/applogs.json || true
-          echo "=== boot lines:"
-          grep -o "Coturn Version[^\"]*\|External IP addresses[^\"]*\|Relay address to use[^\"]*\|Unknown argument[^\"]*\|ERROR: CONFIG[^\"]*" /tmp/applogs.json | tail -8
+          echo "=== boot lines (bytes=$(wc -c < /tmp/applogs.json 2>/dev/null || echo 0)):"
+          grep -o "Coturn Version[^\"]*\|External IP addresses[^\"]*\|Relay address to use[^\"]*\|Unknown argument[^\"]*\|ERROR: CONFIG[^\"]*" /tmp/applogs.json 2>/dev/null | tail -8 || true
           echo "--- tail:"
-          cat /tmp/applogs.json | tail -c 900
+          cat /tmp/applogs.json | tail -c 900 || true
       - name: External port check
         run: |
           # give the build/pull time; poll TCP 3478 from this external runner
