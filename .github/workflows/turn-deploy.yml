@@ -81,9 +81,11 @@ jobs:
         run: |
           source /tmp/cf.sh
           SERVER_UUID=$(jq -r '.[0].uuid' /tmp/servers.json)
-          PROJECT_UUID=$(jq -r '.project_uuid' /tmp/app-detail.json)
+          API GET /api/v1/projects > /tmp/projects.json
+          PROJECT_UUID=$(jq -r '.[] | select(.name=="Solace") | .uuid' /tmp/projects.json | head -1)
           ENV_NAME=$(jq -r '.environment_name' /tmp/app-detail.json)
           echo "server=$SERVER_UUID project=$PROJECT_UUID env=$ENV_NAME"
+          echo "projects: $(jq -r '[.[].name] | join(",")' /tmp/projects.json)"
           EXISTING=$(jq -r '.[] | select(.name=="solace-turn") | .uuid' /tmp/apps.json 2>/dev/null | head -1)
           jq -n \
             --arg p "$PROJECT_UUID" --arg s "$SERVER_UUID" --arg e "$ENV_NAME" \
