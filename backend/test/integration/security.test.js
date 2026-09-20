@@ -104,3 +104,23 @@ test("room:create flood past per-IP window returns RATE_LIMITED, socket stays al
     assert.ok(limited.length >= 1, `expected RATE_LIMITED, got ${errors.map((e) => e.code).join(",") || "none"}`);
     assert.equal(client.connected, true);
 });
+
+test("room:join flood past per-IP window returns RATE_LIMITED without disconnect", async () => {
+    process.env.SOLACE_JOIN_LIMIT_PER_IP = "3";
+    process.env.SOLACE_JOIN_WINDOW_MS = "60000";
+    const { port } = await boot();
+    const host = track(await connectClient(port));
+    const createdPromise = waitForEvent(host, "room:created");
+    host.emit("room:create", { displayName: "Host" });
+    const created = await createdPromise;
+
+    const errors = [];
+    for (let i = 0; i < 5; i++) {
+        const ep = waitForEvent(host, "room:error", (p) => p.code === "ALREADY_IN_ROOM" || p.code === "RATE_LIMITED");
+        host.emit("room:join", { roomId: created.roomId, displayName: "Flood" + i });
+        try { errors.push(await ep); } catch { /* flush window */ }
+    }
+    const limited = errors.filter((e) => e.code === "RATE_LIMITED");
+    assert.ok(limited.length >= 1, `expected RATE_LIMITED, got ${errors.map((e) => e.code).join(",") || "none"}`);
+    assert.equal(host.connected, true);
+});

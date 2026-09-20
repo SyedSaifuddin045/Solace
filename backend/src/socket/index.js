@@ -9,7 +9,7 @@ const createActivityHandler = require("./handlers/activityHandler");
 const createTimerHandler = require("./handlers/timerHandler");
 const { createRtcHandler, resolveIceServers } = require("./handlers/rtcHandler");
 const { refreshTrack } = require("../track/resolve");
-const { createConnectionGuard } = require("./ipLimits");
+const { createConnectionGuard, createIpWindowLimiter } = require("./ipLimits");
 
 function createSocketServer(httpServer, roomService = new RoomService(MemoryRoomStore, null, { refreshTrack })) {
     const io = new Server(httpServer, {
@@ -83,6 +83,11 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
     const globalRateCheck = makeRateLimiter();
     const relayRateCheck = makeRelayLimiter();
 
+    // Per-IP window for room creation/joining: an attacker who reconnects fresh
+    // sockets to dodge the per-socket guard still exhausts one shared budget.
+    // Reject-only — the socket stays connected (no UX shock for legit retries).
+    const joinIpCheck = createIpWindowLimiter({});
+
     const roomHandler = createRoomHandler(io, roomService);
     const playbackHandler = createPlaybackHandler(io, roomService);
     const wallpaperHandler = createWallpaperHandler(io, roomService);
@@ -135,9 +140,19 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
         }
 
         socket.on(CLIENT.ROOM_CREATE, guarded(CLIENT.ROOM_CREATE, (payload) => {
+            const { allow } = joinIpCheck(socket);
+            if (!allow) {
+                socket.emit(SERVER.ROOM_ERROR, { code: "RATE_LIMITED", message: "Too many room operations from this address" });
+                return;
+            }
             roomHandler.handleCreate(socket, payload, emitIceConfig);
         }));
         socket.on(CLIENT.ROOM_JOIN, guarded(CLIENT.ROOM_JOIN, (payload) => {
+            const { allow } = joinIpCheck(socket);
+            if (!allow) {
+                socket.emit(SERVER.ROOM_ERROR, { code: "RATE_LIMITED", message: "Too many room operations from this address" });
+                return;
+            }
             roomHandler.handleJoin(socket, payload, emitIceConfig);
         }));
         socket.on(CLIENT.ROOM_LEAVE, guarded(CLIENT.ROOM_LEAVE, () => roomHandler.handleLeave(socket)));
