@@ -249,6 +249,71 @@ describe("resolveTrack playability contract", () => {
     });
 });
 
+describe("yt-dlp concurrency semaphore", () => {
+    const YT1 = "https://www.youtube.com/watch?v=aaaaaaaaaaa";
+    const YT2 = "https://www.youtube.com/watch?v=bbbbbbbbbbb";
+    const YT3 = "https://www.youtube.com/watch?v=ccccccccccc";
+    const YT4 = "https://www.youtube.com/watch?v=ddddddddddd";
+    const YT5 = "https://www.youtube.com/watch?v=eeeeeeeeeee";
+
+    function withEnv(kv, fn) {
+        const saved = {};
+        for (const [k, v] of Object.entries(kv)) saved[k] = process.env[k];
+        for (const [k, v] of Object.entries(kv)) {
+            if (v === undefined) delete process.env[k];
+            else process.env[k] = v;
+        }
+        try { return fn(); }
+        finally {
+            for (const [k, v] of Object.entries(saved)) {
+                if (v === undefined) delete process.env[k];
+                else process.env[k] = v;
+            }
+        }
+    }
+
+    it("rejects a third concurrent resolve while two are in flight", async () => {
+        cacheClear();
+        // Warm the cache so resolveYouTubeInner skips the oEmbed network
+        // round-trip and reaches the yt-dlp exec synchronously — otherwise the
+        // slowExec gate promise registers after the release below and the test
+        // hangs on Promise.all. Cache hits still re-run yt-dlp extraction.
+        await resolveYouTube(YT1, { execFileAsync: fakeExecSuccess });
+        await resolveYouTube(YT2, { execFileAsync: fakeExecSuccess });
+        const gate = [];
+        const slowExec = () => new Promise((resolve) => gate.push(resolve)); // held open
+        await withEnv({ SOLACE_MAX_CONCURRENT_RESOLVES: "2" }, async () => {
+            const p1 = resolveYouTube(YT1, { execFileAsync: slowExec });
+            const p2 = resolveYouTube(YT2, { execFileAsync: slowExec });
+            // Counter increments synchronously at entry; no awaits needed.
+            await assert.rejects(
+                resolveYouTube(YT3, { execFileAsync: fakeExecSuccess }),
+                (err) => err.code === "RATE_LIMITED"
+            );
+            gate.forEach((g) => g({ stdout: STREAM_URL + "\n", stderr: "" }));
+            await Promise.all([p1, p2]);
+        });
+    });
+
+    it("drains the semaphore after resolves complete", async () => {
+        cacheClear();
+        await withEnv({ SOLACE_MAX_CONCURRENT_RESOLVES: "2" }, async () => {
+            const first = await resolveYouTube(YT4, { execFileAsync: fakeExecSuccess });
+            assert.equal(first.audioUrl, STREAM_URL);
+            const second = await resolveYouTube(YT5, { execFileAsync: fakeExecSuccess });
+            assert.equal(second.audioUrl, STREAM_URL);
+        });
+    });
+
+    it("falls back to default 2 when env is invalid (0 or NaN)", async () => {
+        cacheClear();
+        await withEnv({ SOLACE_MAX_CONCURRENT_RESOLVES: "0" }, async () => {
+            const result = await resolveYouTube(YT4, { execFileAsync: fakeExecSuccess });
+            assert.equal(result.audioUrl, STREAM_URL);
+        });
+    });
+});
+
 describe("refreshTrack", () => {
     const YT_TRACK = {
         url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
