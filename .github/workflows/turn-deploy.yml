@@ -46,27 +46,24 @@ jobs:
           echo "--- servers"
           API GET /api/v1/servers > /tmp/servers.json
           jq -r '.[] | "SERVER \(.uuid) \(.name) ip=\(.ip) \(.settings.is_reachable)"' /tmp/servers.json || cat /tmp/servers.json
-          echo "--- projects"
-          API GET /api/v1/projects > /tmp/projects.json
-          jq -r '.[] | "PROJECT \(.uuid) \(.name) envs=\([.environments[].name]|join(","))"' /tmp/projects.json || cat /tmp/projects.json
-          echo "--- existing apps"
+          echo "--- backend app detail (source of project+env)"
+          API GET /api/v1/applications/kk17nds0emb90iz9mce73c02 > /tmp/app-detail.json
+          jq '{uuid, name, project_uuid, environment_name, git_repository, git_branch, build_pack}' /tmp/app-detail.json
+          echo "--- existing apps (turn?)"
           API GET /api/v1/applications > /tmp/apps.json || true
           jq -r '.[] | "APP \(.uuid) \(.name) \(.status)"' /tmp/apps.json 2>/dev/null || echo "no apps list"
-          cp /tmp/servers.json /tmp/projects.json /tmp/apps.json /tmp/
 
       - name: Create coturn compose app (idempotent)
         run: |
           source /tmp/cf.sh
           SERVER_UUID=$(jq -r '.[0].uuid' /tmp/servers.json)
-          PROJECT_UUID=$(jq -r '.[0].uuid' /tmp/projects.json)
-          echo "server=$SERVER_UUID project=$PROJECT_UUID"
-          # Find project environment uuid (draft/production)
-          ENV_UUID=$(jq -r --arg p "$PROJECT_UUID" '.[] | select(.uuid==$p) | .environments[0].uuid' /tmp/projects.json)
-          echo "env=$ENV_UUID"
+          PROJECT_UUID=$(jq -r '.project_uuid' /tmp/app-detail.json)
+          ENV_NAME=$(jq -r '.environment_name' /tmp/app-detail.json)
+          echo "server=$SERVER_UUID project=$PROJECT_UUID env=$ENV_NAME"
           EXISTING=$(jq -r '.[] | select(.name=="solace-turn") | .uuid' /tmp/apps.json 2>/dev/null | head -1)
           jq -n \
-            --arg p "$PROJECT_UUID" --arg e "$ENV_UUID" --arg s "$SERVER_UUID" \
-            '{server_uuid:$s, project_uuid:$p, environment_name:"production", git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", docker_compose_location:"docker-compose.turn.yml", ports_exposes:"3478", name:"solace-turn", description:"coturn relay for WebRTC"}' > /tmp/body.json
+            --arg p "$PROJECT_UUID" --arg s "$SERVER_UUID" --arg e "$ENV_NAME" \
+            '{server_uuid:$s, project_uuid:$p, environment_name:$e, git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", docker_compose_location:"docker-compose.turn.yml", ports_exposes:"3478", name:"solace-turn", description:"coturn relay for WebRTC"}' > /tmp/body.json
           cat /tmp/body.json
           if [ -n "$EXISTING" ]; then
             echo "APP EXISTS uuid=$EXISTING (skip create)"
@@ -78,7 +75,6 @@ jobs:
             UUID=$(echo "$RESP" | jq -r '.uuid')
             echo "uuid=$UUID" >> "$GITHUB_ENV"
           fi
-          echo "TARGET_UUID=$EXISTING${EXISTING:+}"
 
       - name: Deploy coturn
         run: |
