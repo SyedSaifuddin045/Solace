@@ -121,7 +121,7 @@ jobs:
           API GET "/api/v1/projects" > /dev/null
           for i in $(seq 1 18); do
             D=$(API GET "/api/v1/deployments/applications/${{ env.uuid }}" 2>/dev/null || echo '[]')
-            ST=$(echo "$D" | jq -r 'sort_by(.created_at) | last | .status // "unknown"')
+            ST=$(echo "$D" | jq -r 'if length==0 then "none" else (sort_by(.created_at)|last|.status // "unknown") end' 2>/dev/null || echo "unknown")
             echo "deployment status=$ST ($i)"
             case "$ST" in finished|failed|exited|success|error) break;; esac
             sleep 10
