@@ -1,104 +1,13 @@
 const express = require("express");
-const http = require("node:http");
 const https = require("node:https");
 const rateLimit = require("express-rate-limit");
 const { resolveTrack } = require("./resolve");
 
-const PROXY_UA =
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 SolaceProxy/1.0";
-const FOLLOW_MAX_REDIRECTS = 5;
-const PROXY_MAX_BYTES = 100 * 1024 * 1024; // 100MB cap per proxied response
-
-// Follow googlevideo CDN 302s (cms_redirect / redirect_counter) — the signed URLs
-// routinely re-route to a second edge node. Without this, the browser receives an
-// empty text/html body and blocks the stream (ORB), which used to force
-// embed-fallback on every song in production.
-// Calls onFinal(res) with the FIRST non-3xx response; onError(err) on
-// transport failure / redirect cap. Redirect chains are capped and protocol-restricted.
-function followRedirectsGet(targetUrl, { headers, timeout }, onFinal, onError, maxRedirects = FOLLOW_MAX_REDIRECTS, transport = { http, https }) {
-    let hops = 0;
-    const outHeaders = { "User-Agent": PROXY_UA };
-    if (headers) Object.assign(outHeaders, headers);
-    function attempt(url) {
-        let parsed;
-        try {
-            parsed = new URL(url);
-        } catch {
-            onError(Object.assign(new Error("bad redirect URL"), { code: "BAD_REDIRECT" }));
-            return;
-        }
-        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-            onError(Object.assign(new Error(`unsupported protocol ${parsed.protocol}`), { code: "BAD_REDIRECT" }));
-            return;
-        }
-        const lib = parsed.protocol === "https:" ? transport.https : transport.http;
-        const req = lib.get(parsed.toString(), { headers: outHeaders, timeout }, (res) => {
-            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                res.resume();
-                if (hops >= maxRedirects) {
-                    onError(Object.assign(new Error("too many redirects"), { code: "TOO_MANY_REDIRECTS" }));
-                    return;
-                }
-                hops += 1;
-                attempt(new URL(res.headers.location, url).toString());
-                return;
-            }
-            onFinal(res);
-        });
-        req.on("timeout", () => {
-            req.destroy();
-            onError(Object.assign(new Error("upstream timeout"), { code: "ETIMEDOUT" }));
-        });
-        req.on("error", onError);
-    }
-    attempt(targetUrl);
-}
-
-// Streams the upstream (YouTube) response to the client response. Pure enough
-// for unit tests: proxyRes is any readable (PassThrough), res is a minimal
-// http-like surface ({ writeHead, write, end, destroy, headersSent, status }).
-function streamProxyResponse(proxyRes, res, clientOrigin) {
-    // Forward relevant headers from YouTube — pin CORS to CLIENT_ORIGIN
-    const fwdHeaders = {
-        "Content-Type": proxyRes.headers["content-type"] || "audio/mp4",
-        "Accept-Ranges": "bytes",
-        "Access-Control-Allow-Origin": clientOrigin,
-        "X-Content-Type-Options": "nosniff",
-    };
-    if (proxyRes.headers["content-length"]) {
-        fwdHeaders["Content-Length"] = proxyRes.headers["content-length"];
-    }
-    if (proxyRes.headers["content-range"]) {
-        fwdHeaders["Content-Range"] = proxyRes.headers["content-range"];
-    }
-
-    const statusCode = proxyRes.statusCode === 206 ? 206 : 200;
-    res.writeHead(statusCode, fwdHeaders);
-
-    // Bound response size — abort downstream after cap
-    let forwarded = 0;
-    proxyRes.on("data", (chunk) => {
-        forwarded += chunk.length;
-        if (forwarded > PROXY_MAX_BYTES) {
-            proxyRes.destroy();
-            if (!res.headersSent) {
-                res.status(502).json({ error: "PROXY_TOO_LARGE" });
-            } else {
-                res.destroy();
-            }
-            return;
-        }
-        res.write(chunk);
-    });
-    proxyRes.on("end", () => res.end());
-    proxyRes.on("error", () => { if (!res.headersSent) res.status(502).json({ error: "PROXY_ERROR" }); else res.destroy(); });
-}
-
-function createTrackRouter(roomService, deps = {}) {
-    const transport = deps.transport || { http, https };
+function createTrackRouter(roomService) {
     const router = express.Router();
     const ALLOWED_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3000";
     const PROXY_TIMEOUT_MS = 30_000;
+    const PROXY_MAX_BYTES = 100 * 1024 * 1024; // 100MB cap per proxied response
 
     const resolveLimiter = rateLimit({
         windowMs: 60 * 1000,
@@ -192,24 +101,61 @@ function createTrackRouter(roomService, deps = {}) {
             return res.status(400).json({ error: "INVALID_URL" });
         }
 
-        // Forward range requests for seeking support; googlevideo answers 302s
-        // to a CDN node, so follow them server-side (see followRedirectsGet).
-        // UA default is added inside followRedirectsGet.
+        // Forward range requests for seeking support
         const headers = {};
         if (req.headers.range) {
             headers.Range = req.headers.range;
         }
 
-        const onProxyError = (err) => {
-            console.log("[solace:BE] proxy error", { error: err && err.message });
+        const proxyReq = https.get(url, { headers, timeout: PROXY_TIMEOUT_MS }, (proxyRes) => {
+            // Forward relevant headers from YouTube — pin CORS to CLIENT_ORIGIN
+            const fwdHeaders = {
+                "Content-Type": proxyRes.headers["content-type"] || "audio/mp4",
+                "Accept-Ranges": "bytes",
+                "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+                "X-Content-Type-Options": "nosniff",
+            };
+            if (proxyRes.headers["content-length"]) {
+                fwdHeaders["Content-Length"] = proxyRes.headers["content-length"];
+            }
+            if (proxyRes.headers["content-range"]) {
+                fwdHeaders["Content-Range"] = proxyRes.headers["content-range"];
+            }
+
+            const statusCode = proxyRes.statusCode === 206 ? 206 : 200;
+            res.writeHead(statusCode, fwdHeaders);
+
+            // Bound response size — abort downstream after cap
+            let forwarded = 0;
+            proxyRes.on("data", (chunk) => {
+                forwarded += chunk.length;
+                if (forwarded > PROXY_MAX_BYTES) {
+                    proxyRes.destroy();
+                    if (!res.headersSent) {
+                        res.status(502).json({ error: "PROXY_TOO_LARGE" });
+                    } else {
+                        res.destroy();
+                    }
+                    return;
+                }
+                res.write(chunk);
+            });
+            proxyRes.on("end", () => res.end());
+            proxyRes.on("error", () => { if (!res.headersSent) res.status(502).json({ error: "PROXY_ERROR" }); else res.destroy(); });
+        });
+
+        proxyReq.on("timeout", () => {
+            proxyReq.destroy();
+            if (!res.headersSent) {
+                res.status(504).json({ error: "PROXY_TIMEOUT" });
+            }
+        });
+        proxyReq.on("error", (err) => {
+            console.log("[solace:BE] proxy error", { error: err.message });
             if (!res.headersSent) {
                 res.status(502).json({ error: "PROXY_ERROR" });
             }
-        };
-
-        followRedirectsGet(url, { headers, timeout: PROXY_TIMEOUT_MS }, (proxyRes) => {
-            streamProxyResponse(proxyRes, res, ALLOWED_ORIGIN);
-        }, onProxyError, FOLLOW_MAX_REDIRECTS, transport);
+        });
     });
 
     // Handle CORS preflight — proper origin check instead of wildcard
@@ -224,4 +170,4 @@ function createTrackRouter(roomService, deps = {}) {
     return router;
 }
 
-module.exports = { createTrackRouter, followRedirectsGet, streamProxyResponse };
+module.exports = { createTrackRouter };
