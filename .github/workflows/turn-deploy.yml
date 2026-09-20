@@ -97,15 +97,16 @@ jobs:
             '{server_uuid:$s, project_uuid:$p, environment_name:$e, environment_uuid:$eu, name:"solace-turn", description:"coturn WebRTC relay", git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", build_pack:"dockercompose", docker_compose_location:"/docker-compose.turn.yml", is_auto_deploy_enabled:false, instant_deploy:false}' > /tmp/body.json
           cat /tmp/body.json
           if [ -n "$EXISTING" ]; then
-            echo "APP EXISTS uuid=$EXISTING (skip create)"
-            echo "uuid=$EXISTING" >> "$GITHUB_ENV"
-          else
-            echo "creating app..."
-            RESP=$(API POST /api/v1/applications/public "$(cat /tmp/body.json)")
-            echo "$RESP"
-            UUID=$(echo "$RESP" | jq -r '.uuid')
-            echo "uuid=$UUID" >> "$GITHUB_ENV"
+            echo "APP EXISTS uuid=$EXISTING -- deleting for fresh compose re-parse"
+            API DELETE "/api/v1/applications/$EXISTING" > /tmp/del.json || true
+            echo "deleted: $(cat /tmp/del.json)"
+            sleep 5
           fi
+          echo "creating app..."
+          RESP=$(API POST /api/v1/applications/public "$(cat /tmp/body.json)")
+          echo "$RESP"
+          UUID=$(echo "$RESP" | jq -r '.uuid')
+          echo "uuid=$UUID" >> "$GITHUB_ENV"
 
       - name: Deploy coturn
         run: |
