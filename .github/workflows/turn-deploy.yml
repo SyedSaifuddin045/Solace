@@ -2,6 +2,8 @@ name: Deploy coturn TURN server to Coolify
 
 on:
   workflow_dispatch:
+  push:
+    branches: [turn-deploy]
 
 jobs:
   deploy-turn:
