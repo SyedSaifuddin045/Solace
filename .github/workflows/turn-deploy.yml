@@ -83,13 +83,18 @@ jobs:
           SERVER_UUID=$(jq -r '.[0].uuid' /tmp/servers.json)
           API GET /api/v1/projects > /tmp/projects.json
           PROJECT_UUID=$(jq -r '.[] | select(.name=="Solace") | .uuid' /tmp/projects.json | head -1)
-          ENV_NAME=$(jq -r '.environment_name' /tmp/app-detail.json)
-          echo "server=$SERVER_UUID project=$PROJECT_UUID env=$ENV_NAME"
+          API GET "/api/v1/projects/$PROJECT_UUID" > /tmp/project-detail.json 2>/dev/null || echo '{}' > /tmp/project-detail.json
+          echo "project detail keys: $(jq -r 'keys|join(",")' /tmp/project-detail.json 2>/dev/null)"
+          ENV_NAME=$(jq -r '.environments[0].name // empty' /tmp/project-detail.json)
+          ENV_UUID=$(jq -r '.environments[0].uuid // empty' /tmp/project-detail.json)
+          echo "server=$SERVER_UUID project=$PROJECT_UUID env=$ENV_NAME envUuid=$ENV_UUID"
           echo "projects: $(jq -r '[.[].name] | join(",")' /tmp/projects.json)"
+          echo "environments: $(jq -r '[.environments[]?.name] | join(",")' /tmp/project-detail.json)"
           EXISTING=$(jq -r '.[] | select(.name=="solace-turn") | .uuid' /tmp/apps.json 2>/dev/null | head -1)
+          ENV_NAME="${ENV_NAME:-production}"
           jq -n \
-            --arg p "$PROJECT_UUID" --arg s "$SERVER_UUID" --arg e "$ENV_NAME" \
-            '{server_uuid:$s, project_uuid:$p, environment_name:$e, name:"solace-turn", description:"coturn WebRTC relay", git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", build_pack:"dockercompose", docker_compose_location:"docker-compose.turn.yml", is_auto_deploy_enabled:false, instant_deploy:false}' > /tmp/body.json
+            --arg p "$PROJECT_UUID" --arg s "$SERVER_UUID" --arg e "$ENV_NAME" --arg eu "$ENV_UUID" \
+            '{server_uuid:$s, project_uuid:$p, environment_name:$e, environment_uuid:$eu, name:"solace-turn", description:"coturn WebRTC relay", git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", build_pack:"dockercompose", docker_compose_location:"docker-compose.turn.yml", is_auto_deploy_enabled:false, instant_deploy:false}' > /tmp/body.json
           cat /tmp/body.json
           if [ -n "$EXISTING" ]; then
             echo "APP EXISTS uuid=$EXISTING (skip create)"
