@@ -3,6 +3,7 @@ services:
     image: coturn/coturn:4.6
     container_name: solace-turn
     restart: unless-stopped
+    network_mode: host
     command:
       - "-n"
       - "--log-file=stdout"
@@ -16,13 +17,10 @@ services:
       - "--min-port=50000"
       - "--max-port=50999"
       - "--stale-nonce=600"
+      - "--listening-port=3478"
       - "--log-binding"
       - "--external-ip=167.233.63.56"
       - "--no-cli"
-    ports:
-      - "3478:3478/udp"
-      - "3478:3478/tcp"
-      - "50000-50999:50000-50999/udp"
     deploy:
       resources:
         limits:
