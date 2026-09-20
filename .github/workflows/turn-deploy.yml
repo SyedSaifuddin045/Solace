@@ -77,14 +77,14 @@ jobs:
           EXISTING=$(jq -r '.[] | select(.name=="solace-turn") | .uuid' /tmp/apps.json 2>/dev/null | head -1)
           jq -n \
             --arg p "$PROJECT_UUID" --arg s "$SERVER_UUID" --arg e "$ENV_NAME" \
-            '{server_uuid:$s, project_uuid:$p, environment_name:$e, git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", docker_compose_location:"docker-compose.turn.yml", ports_exposes:"3478", name:"solace-turn", description:"coturn relay for WebRTC"}' > /tmp/body.json
+            '{server_uuid:$s, project_uuid:$p, environment_name:$e, name:"solace-turn", description:"coturn WebRTC relay", git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", build_pack:"dockercompose", docker_compose_location:"docker-compose.turn.yml", is_auto_deploy_enabled:false, instant_deploy:false}' > /tmp/body.json
           cat /tmp/body.json
           if [ -n "$EXISTING" ]; then
             echo "APP EXISTS uuid=$EXISTING (skip create)"
             echo "uuid=$EXISTING" >> "$GITHUB_ENV"
           else
             echo "creating app..."
-            RESP=$(API POST /api/v1/applications/docker-compose "$(cat /tmp/body.json)")
+            RESP=$(API POST /api/v1/applications/public "$(cat /tmp/body.json)")
             echo "$RESP"
             UUID=$(echo "$RESP" | jq -r '.uuid')
             echo "uuid=$UUID" >> "$GITHUB_ENV"
