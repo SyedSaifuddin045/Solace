@@ -18,7 +18,15 @@ beforeEach(() => {
 
 class FakePlayer {
   static instances: FakePlayer[] = [];
-  destroy = vi.fn();
+  // The real YT IFrame API REPLACES its target element at create time: it
+  // removes `el` from the document and inserts its own wrapper (div + iframe),
+  // without React's tree bookkeeping ever noticing. Mimic that faithfully, so
+  // React's later unmount removeChild(el, parent) throws the same NotFoundError
+  // on code that hands a React-owned node to the API.
+  wrapper: HTMLElement;
+  destroy = vi.fn(() => {
+    this.wrapper?.remove?.();
+  });
   playVideo = vi.fn();
   pauseVideo = vi.fn();
   seekTo = vi.fn();
@@ -28,7 +36,11 @@ class FakePlayer {
   getVolume = vi.fn(() => 100);
   setVolume = vi.fn();
   getVideoData = vi.fn(() => ({ video_id: "abc123DEFGh" }));
-  constructor() {
+  constructor(el: HTMLElement) {
+    const wrapper = document.createElement("div");
+    wrapper.setAttribute("data-fake-yt-wrapper", "1");
+    if (el.parentNode) el.replaceWith(wrapper);
+    this.wrapper = wrapper;
     FakePlayer.instances.push(this);
   }
 }
@@ -158,12 +170,40 @@ describe("TrackPlayback per-client mode + fallback self-heal + YT teardown", () 
     expect(document.querySelector('div[aria-hidden="true"]')).toBeNull();
   });
 
-  it("D5: unmounting the YouTube player destroys the YT.Player instance (kills ghost audio)", async () => {
-    setTrack({ url: YT_URL });
+  it("D5: embed→stream flip unmounts the YT player without crashing React (detached mount)", async () => {
+    // start on the proxied stream
+    setTrack({ url: YT_URL, audioUrl: "https://stream.example/a1.mp3" });
     const { unmount } = render(<TrackPlayback />);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((window as any).__solaceAudio).toBeTruthy();
+
+    // stream fetch fails → same track swaps to the embed (YT player created)
+    act(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__solaceAudio.dispatchEvent(new Event("error"));
+    });
     await waitFor(() => expect(FakePlayer.instances).toHaveLength(1));
     const player = FakePlayer.instances[0];
-    unmount();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((window as any).__solaceEmbed).toBeTruthy();
+
+    // fresh audioUrl for the same url → flip back to the stream: the embed's
+    // React subtree unmounts while destroy() tears down the YT-owned wrapper.
+    // The container div must STILL be React-owned — old code handed the
+    // container to the YT API, which replaced it, so unmount removeChild threw
+    // NotFoundError and the PLAYBACK ENGINE died (both engines gone → silence).
+    setTrack({ url: YT_URL, audioUrl: "https://stream.example/a2.mp3" });
+    await waitFor(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((window as any).__solaceAudio).toBeTruthy();
+    });
     expect(player.destroy).toHaveBeenCalledTimes(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((window as any).__solaceEmbed).toBeUndefined();
+    // container was removed cleanly BY REACT, not destroyed underneath it
+    expect(document.querySelector('div[aria-hidden="true"]')).toBeNull();
+
+    // final unmount of the stream tree must not throw either
+    unmount();
   });
 });

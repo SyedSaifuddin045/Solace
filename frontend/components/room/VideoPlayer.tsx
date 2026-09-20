@@ -279,6 +279,9 @@ export function YouTubePlayer() {
   const position = useRoomStore((s) => s.state.playback.position);
   const updatedAt = useRoomStore((s) => s.state.playback.updatedAt);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // The node handed to `new YT.Player(...)`. The YT API replaces it with its
+  // own wrapper (see the boot effect below) — React must never own it.
+  const mountRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const lastStatusRef = useRef<string>("");
   const lastVideoIdRef = useRef<string | null>(null);
@@ -360,19 +363,34 @@ export function YouTubePlayer() {
       if (cancelled || !containerRef.current) return;
       // Stale-instance guard: a leftover player (double-ready race, re-boot)
       // would keep playing audio from a detached iframe — destroy it before
-      // creating a new one.
-      if (playerRef.current) {
+      // creating a new one (and drop its mount node too).
+      if (playerRef.current || mountRef.current) {
         try {
-          if (typeof playerRef.current.destroy === "function") playerRef.current.destroy();
+          if (typeof playerRef.current?.destroy === "function") playerRef.current.destroy();
         } catch {
           // adblock/CSP can make destroy throw — drop the reference anyway
         }
         playerRef.current = null;
+        mountRef.current?.remove?.();
+        mountRef.current = null;
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const YT = (window as any).YT;
+      // YT.Player REPLACES its target element: it removes the node from the
+      // document and inserts its own wrapper div + iframe, without touching
+      // React's tree bookkeeping. React must NEVER own a node the YT API has
+      // consumed, or unmount's removeChild(container, parent) throws
+      // NotFoundError and the playback engine dies mid-flip. So the
+      // containerRef div stays a stable React-owned child, and the player
+      // lives in a tiny detached `mount` node appended inside it — a node
+      // only this component ever removes.
+      const mount = document.createElement("div");
+      mount.style.width = "1px";
+      mount.style.height = "1px";
+      containerRef.current.appendChild(mount);
+      mountRef.current = mount;
       try {
-        playerRef.current = YT.Player ? new YT.Player(containerRef.current, {
+        playerRef.current = YT.Player ? new YT.Player(mount, {
           height: "1",
           width: "1",
           playerVars: { playsinline: 1, controls: 0 },
@@ -411,7 +429,9 @@ export function YouTubePlayer() {
       cancelled = true;
       // Kill ghost audio: a live YT.Player keeps playing from a detached
       // iframe after unmount. destroy() tears it down (guarded — adblock/CSP
-      // can make the method absent or throw).
+      // can make the method absent or throw). Order matters: destroy() first
+      // (kills the audio), then remove the mount node (our own node — React
+      // never tracks it, so no NotFoundError), then null the playerRef.
       if (playerRef.current) {
         try {
           if (typeof playerRef.current.destroy === "function") playerRef.current.destroy();
@@ -420,6 +440,8 @@ export function YouTubePlayer() {
         }
         playerRef.current = null;
       }
+      mountRef.current?.remove?.();
+      mountRef.current = null;
     };
 
   }, []);
