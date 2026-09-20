@@ -117,3 +117,4 @@ PYEOF
             echo "waiting... ($i)"
           done
           timeout 5 bash -c "</dev/tcp/167.233.63.56/3478" 2>/dev/null && echo "FINAL: tcp3478 OPEN" || echo "FINAL: tcp3478 CLOSED/TIMEOUT"
+# registry-refresh
