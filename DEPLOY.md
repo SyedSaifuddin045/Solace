@@ -217,3 +217,49 @@ docker compose up --build
 # Frontend: http://localhost:3000
 # Backend: http://localhost:8080
 ```
+
+---
+
+## Security Hardening
+
+App-layer limits are code (see `backend/src/socket/ipLimits.js`, `backend/src/track/resolve.js`). Edge/container layers below.
+
+### X-Forwarded-For trust chain (READ FIRST)
+
+Per-IP rate limits read the FIRST value of `X-Forwarded-For`. That value is only trustworthy if NO client can reach the origin with a forged header. In the intended topology this holds:
+
+1. Cloudflare proxies all traffic to the origin and overwrites client-supplied `X-Forwarded-For` with the real connecting IP.
+2. Traefik (Coolify, `forwardedHeaders.trustedIPs` = docker network) strips and re-derives `X-Forwarded-For` from the actual connection.
+3. The origin is bound so only Cloudflare/Traefik can reach it (firewall 443 to Cloudflare IP ranges; never expose Traefik directly).
+
+If you bypass Cloudflare or drop `trustedIPs`, per-IP caps become attacker-spoofable (mintable identities). The GLOBAL caps (connection guard totals, per-socket throttles) still hold — per-IP limits are best-effort under direct-origin exposure. Do not weaken the global caps as compensation.
+
+### Cloudflare rules (domain: api.solaceroom.xyz)
+| Rule | Path | Limit | Matching app limit |
+|---|---|---|---|
+| Rate limit | `/track/resolve` | 10 req/min/IP | resolveLimiter 10/min |
+| Rate limit | `/track/proxy` | 30 req/min/IP | proxyLimiter 30/min |
+| Rate limit | `POST /uploads` | 10 req/15min/IP | uploadLimiter 10/15min |
+| WAF | managed rules | ON | — |
+
+- WebSockets must stay **enabled** (socket.io upgrade) on api.solaceroom.xyz.
+- "Under Attack" mode = manual lever during an active flood. NOT default — the JS challenge breaks the watch UX (autoplay, seek).
+- Socket-level gating (connection caps, per-IP join windows) is app-side only — Cloudflare cannot see per-socket events.
+
+### Coolify resource limits (mirror docker-compose.yml)
+| App | Memory | CPU | PIDs |
+|---|---|---|---|
+| backend | 512 MB | 1.0 | 256 |
+| frontend | 256 MB | 0.5 | 128 |
+
+Set in Coolify → app → Advanced / Resources. Also keep the health checks configured (they already are).
+
+### Alerting
+- Cloudflare Health Checks → external uptime ping after 2 consecutive failures.
+- Watch: container restarts, memory watermark, `RATE_LIMITED` log volume (`[solace:BE]` lines).
+
+### Incident playbook
+1. Confirm flood: `docker stats` (mem/CPU), backend logs for repeated `RATE_LIMITED` / resolve floods.
+2. Flip CF "Under Attack" on api.solaceroom.xyz (accept UX hit) OR tighten rate rules.
+3. Block the specific path in CF WAF if a single endpoint is targeted.
+4. After it subsides, revert Under Attack and confirm WebSocket connect + room join.
