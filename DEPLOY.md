@@ -232,6 +232,10 @@ Per-IP rate limits read the FIRST value of `X-Forwarded-For`. That value is only
 2. Traefik (Coolify, `forwardedHeaders.trustedIPs` = docker network) strips and re-derives `X-Forwarded-For` from the actual connection.
 3. The origin is bound so only Cloudflare/Traefik can reach it (firewall 443 to Cloudflare IP ranges; never expose Traefik directly).
 
+Deploy-time checklist:
+- Coolify Traefik `forwardedHeaders.trustedIPs` includes Cloudflare IP ranges (https://www.cloudflare.com/ips/) — otherwise every user collapses to one CF edge IP and legit users share the 20-connection per-IP cap together.
+- Origin firewall allows 443 only from Cloudflare IP ranges. No direct-origin access.
+
 If you bypass Cloudflare or drop `trustedIPs`, per-IP caps become attacker-spoofable (mintable identities). The GLOBAL caps (connection guard totals, per-socket throttles) still hold — per-IP limits are best-effort under direct-origin exposure. Do not weaken the global caps as compensation.
 
 ### Cloudflare rules (domain: api.solaceroom.xyz)
