@@ -94,14 +94,14 @@ test("room:create flood past per-IP window returns RATE_LIMITED, socket stays al
     process.env.SOLACE_JOIN_WINDOW_MS = "60000";
     const { port } = await boot();
     const client = track(await connectClient(port));
-    const errors = [];
-    for (let i = 0; i < 5; i++) {
-        const ep = waitForEvent(client, "room:error", (p) => p.code === "RATE_LIMITED" || p.code === "REACHED_MAX_ROOMS");
+    for (let i = 0; i < 3; i++) {
+        const ep = waitForEvent(client, "room:created", (p) => !p.error);
         client.emit("room:create", { displayName: "Flood" + i });
-        try { errors.push(await ep); } catch { /* flush window */ }
+        await ep; // 3 successful creates consume the budget
     }
-    const limited = errors.filter((e) => e.code === "RATE_LIMITED");
-    assert.ok(limited.length >= 1, `expected RATE_LIMITED, got ${errors.map((e) => e.code).join(",") || "none"}`);
+    const rejected = waitForEvent(client, "room:error", (p) => p.code === "RATE_LIMITED");
+    client.emit("room:create", { displayName: "Flood3" });
+    await rejected;
     assert.equal(client.connected, true);
 });
 
