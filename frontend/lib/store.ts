@@ -10,7 +10,7 @@ export interface Track {
   provider?: string;
   audioUrl?: string;
   embeddable?: boolean;
-  /** "stream" = backend proxied audio URL, "embed" = YouTube iframe fallback */
+  /** Informational only — the engine decides: audioUrl present → stream, else embed fallback. */
   playMode?: "stream" | "embed";
 }
 export interface Playback { status: PlaybackStatus; track: Track | null; position: number; updatedAt: number }

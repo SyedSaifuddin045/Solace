@@ -20,7 +20,6 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
     duration?: number;
     provider?: string;
     embeddable?: boolean;
-    playMode?: "stream" | "embed";
   } | null>(null);
 
   const handleResolve = async () => {
@@ -43,7 +42,6 @@ export function TrackPicker({ onClose }: { onClose: () => void }) {
           artwork: m.artwork,
           provider: "youtube",
           embeddable: true,
-          playMode: "embed",
         });
         pushToast("stream blocked — using embed fallback", "ok");
       } else {

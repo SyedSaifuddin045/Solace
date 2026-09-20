@@ -1,6 +1,6 @@
 "use client";
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
-import { useRoomStore } from "@/lib/store";
+import { useRoomStore, type Track } from "@/lib/store";
 import { BACKEND_URL } from "@/lib/socket";
 import { extractYouTubeId } from "@/lib/youtube";
 import { loadVolume } from "@/lib/volume";
@@ -253,6 +253,7 @@ type YTPlayer = {
   getVolume(): number;
   setVolume(volume: number): void;
   getVideoData(): { video_id?: string };
+  destroy(): void;
 };
 
 let ytApiPromise: Promise<unknown> | null = null;
@@ -278,6 +279,9 @@ export function YouTubePlayer() {
   const position = useRoomStore((s) => s.state.playback.position);
   const updatedAt = useRoomStore((s) => s.state.playback.updatedAt);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // The node handed to `new YT.Player(...)`. The YT API replaces it with its
+  // own wrapper (see the boot effect below) — React must never own it.
+  const mountRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const lastStatusRef = useRef<string>("");
   const lastVideoIdRef = useRef<string | null>(null);
@@ -352,15 +356,41 @@ export function YouTubePlayer() {
     updatedAtRef.current = updatedAt;
   }, [status, position, updatedAt]);
 
-  // Boot the API + create the player once
+// Boot the API + create the player once
   useEffect(() => {
     let cancelled = false;
     loadYouTubeApi().then(() => {
       if (cancelled || !containerRef.current) return;
+      // Stale-instance guard: a leftover player (double-ready race, re-boot)
+      // would keep playing audio from a detached iframe — destroy it before
+      // creating a new one (and drop its mount node too).
+      if (playerRef.current || mountRef.current) {
+        try {
+          if (typeof playerRef.current?.destroy === "function") playerRef.current.destroy();
+        } catch {
+          // adblock/CSP can make destroy throw — drop the reference anyway
+        }
+        playerRef.current = null;
+        mountRef.current?.remove?.();
+        mountRef.current = null;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const YT = (window as any).YT;
+      // YT.Player REPLACES its target element: it removes the node from the
+      // document and inserts its own wrapper div + iframe, without touching
+      // React's tree bookkeeping. React must NEVER own a node the YT API has
+      // consumed, or unmount's removeChild(container, parent) throws
+      // NotFoundError and the playback engine dies mid-flip. So the
+      // containerRef div stays a stable React-owned child, and the player
+      // lives in a tiny detached `mount` node appended inside it — a node
+      // only this component ever removes.
+      const mount = document.createElement("div");
+      mount.style.width = "1px";
+      mount.style.height = "1px";
+      containerRef.current.appendChild(mount);
+      mountRef.current = mount;
       try {
-        playerRef.current = YT.Player ? new YT.Player(containerRef.current, {
+        playerRef.current = YT.Player ? new YT.Player(mount, {
           height: "1",
           width: "1",
           playerVars: { playsinline: 1, controls: 0 },
@@ -397,8 +427,23 @@ export function YouTubePlayer() {
     });
     return () => {
       cancelled = true;
+      // Kill ghost audio: a live YT.Player keeps playing from a detached
+      // iframe after unmount. destroy() tears it down (guarded — adblock/CSP
+      // can make the method absent or throw). Order matters: destroy() first
+      // (kills the audio), then remove the mount node (our own node — React
+      // never tracks it, so no NotFoundError), then null the playerRef.
+      if (playerRef.current) {
+        try {
+          if (typeof playerRef.current.destroy === "function") playerRef.current.destroy();
+        } catch {
+          // ignore — reference dropped anyway
+        }
+        playerRef.current = null;
+      }
+      mountRef.current?.remove?.();
+      mountRef.current = null;
     };
-     
+
   }, []);
 
   // Expose engine for SongWidget progress/seek (mirrors window.__solaceAudio)
@@ -477,15 +522,39 @@ export function YouTubePlayer() {
  */
 export function TrackPlayback() {
   const track = useRoomStore((s) => s.state.playback.track);
-  const [fallback, setFallback] = useState<{ url: string; active: boolean } | null>(null);
-
   const trackUrl = track?.url ?? null;
+
+  // Key the engine subtree by current track url so ANY url transition (incl. a
+  // pass through null) fully re-mounts with a fresh fallback latch. Without
+  // this, a stale `.active` would survive a track → null → SAME url re-pick and
+  // snap the re-picked song straight to the embed with no fresh stream attempt.
+  // Remounting on a truly NEW url is also always correct: the new track has no
+  // error history yet. Re-broadcasts of the SAME url keep the key and preserve
+  // the latch (same url + same audioUrl stays embed; a fresh audioUrl yields).
+  return <TrackEngine key={trackUrl ?? "no-track"} track={track} trackUrl={trackUrl} />;
+}
+
+function TrackEngine({ track, trackUrl }: { track: Track | null; trackUrl: string | null }) {
+  const [fallback, setFallback] = useState<{ url: string; audioUrl: string | null; active: boolean } | null>(null);
+
   const videoId = track ? extractYouTubeId(track.url) : null;
 
   // Per-track runtime fallback: only counts while the SAME url is current, so
-  // a track change (queue advance / new pick) implicitly resets it.
-  const embedFallback = trackUrl !== null && fallback?.url === trackUrl && fallback.active;
-  const isEmbed = !!videoId && (track?.playMode === "embed" || embedFallback);
+  // a track change (queue advance / new pick) implicitly resets it. The embed
+  // also requires the SAME failing audioUrl — when the url gets a FRESH stream
+  // URL (backend re-broadcast on auto-advance) the fallback yields and
+  // AudioPlayer retries the stream; same url + same dead audioUrl keeps the
+  // embed, which prevents error loops.
+  const embedFallback =
+    trackUrl !== null &&
+    fallback?.url === trackUrl &&
+    fallback.active &&
+    fallback.audioUrl === track?.audioUrl;
+  // Mode is decided per client: stream whenever a playable audioUrl exists
+  // (track.playMode is informational only), embed only when the track has no
+  // stream URL but is a YouTube video, or when the runtime fallback is active
+  // for the exact url + audioUrl currently playing.
+  const isEmbed = !!videoId && (!track?.audioUrl || embedFallback);
 
   if (isEmbed) return <YouTubePlayer />;
   return (
@@ -493,7 +562,7 @@ export function TrackPlayback() {
       onStreamError={
         videoId && trackUrl !== null
           ? () => {
-              setFallback({ url: trackUrl, active: true });
+              setFallback({ url: trackUrl, audioUrl: track?.audioUrl ?? null, active: true });
               pushToast("stream failed — using embed fallback", "amber");
             }
           : undefined

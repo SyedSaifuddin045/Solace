@@ -121,11 +121,12 @@ class QueueFullError extends Error {
 }
 
 class RoomService {
-    constructor(store, timers) {
+    constructor(store, timers, deps = {}) {
         this.store = store;
         this._now = (timers && timers.now) || (() => Date.now());
         this._schedule = (timers && timers.schedule) || ((fn, ms) => setTimeout(fn, ms));
         this._cancel = (timers && timers.cancel) || ((id) => clearTimeout(id));
+        this.refreshTrack = deps.refreshTrack || null;
     }
 
     _assertRoomId(roomId) {

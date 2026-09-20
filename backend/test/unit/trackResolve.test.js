@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { detectProvider, extractYouTubeId, cacheClear, normalizeProxy, buildProxyPool, buildYtDlpArgs, resolveYouTube, resolveTrack } = require("../../src/track/resolve");
+const { detectProvider, extractYouTubeId, cacheClear, normalizeProxy, buildProxyPool, buildYtDlpArgs, resolveYouTube, resolveTrack, refreshTrack } = require("../../src/track/resolve");
 
 describe("detectProvider", () => {
     it("detects standard youtube.com/watch URLs", () => {
@@ -186,6 +186,21 @@ describe("resolveYouTube", () => {
         assert.deepEqual(seen, ["http://u:p@bad:1", "http://u:p@good:2"]);
     });
 
+    it("cache hit on second resolve within TTL returns a FRESH audioUrl (stale signed URL bug)", async () => {
+        cacheClear();
+        let calls = 0;
+        const perCallExec = async () => {
+            calls += 1;
+            return Promise.resolve({ stdout: STREAM_URL + "-" + calls + "\n", stderr: "" });
+        };
+        const first = await resolveYouTube("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { execFileAsync: perCallExec });
+        const second = await resolveYouTube("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { execFileAsync: perCallExec });
+        assert.equal(calls, 2, "second resolve must re-run yt-dlp extraction even on cache hit");
+        assert.equal(second.audioUrl, STREAM_URL + "-2", "cache hit must hand out a fresh audioUrl, not the cached signed URL");
+        assert.notEqual(second.audioUrl, first.audioUrl);
+        assert.equal(second.title, first.title, "metadata should still be served from the cache");
+    });
+
     it("refreshes the proxy pool once and retries when the live pool is exhausted", async () => {
         cacheClear();
         const savedKey = process.env.PROXY_API_KEY;
@@ -231,5 +246,42 @@ describe("resolveTrack playability contract", () => {
         cacheClear();
         const result = await resolveTrack("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { execFileAsync: fakeExecSuccess });
         assert.equal(result.audioUrl, STREAM_URL);
+    });
+});
+
+describe("refreshTrack", () => {
+    const YT_TRACK = {
+        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        title: "Old Title",
+        artist: "Old Artist",
+        artwork: "old.jpg",
+        duration: 42,
+        provider: "youtube",
+        audioUrl: "https://stale.example/old.m4a",
+        embeddable: true,
+    };
+
+    it("returns non-youtube tracks unchanged (uploads / soundcloud never refreshed)", async () => {
+        const t = { url: "http://t/1", provider: "upload", audioUrl: "http://t/1.aac" };
+        const result = await refreshTrack(t);
+        assert.equal(result, t);
+    });
+
+    it("returns null/undefined tracks unchanged", async () => {
+        assert.equal(await refreshTrack(null), null);
+        assert.equal(await refreshTrack(undefined), undefined);
+    });
+
+    it("never throws and keeps the original track when extraction fails", async () => {
+        const result = await refreshTrack({ ...YT_TRACK }, { execFileAsync: fakeExecFailure });
+        assert.equal(result.audioUrl, YT_TRACK.audioUrl);
+        assert.equal(result.title, YT_TRACK.title);
+    });
+
+    it("refreshes audioUrl and merges fresh metadata for youtube tracks", async () => {
+        const result = await refreshTrack({ ...YT_TRACK }, { execFileAsync: fakeExecSuccess });
+        assert.equal(result.audioUrl, STREAM_URL);
+        assert.equal(result.url, YT_TRACK.url, "track identity URL must be preserved");
+        assert.equal(result.provider, "youtube");
     });
 });

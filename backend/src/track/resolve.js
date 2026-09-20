@@ -156,20 +156,31 @@ async function resolveYouTube(url, opts = {}) {
 
     const canonical = `https://www.youtube.com/watch?v=${videoId}`;
     const cacheKey = `youtube:${videoId}`;
+    // CACHE SPLIT: the cached entry holds METADATA ONLY (url, title, artist,
+    // artwork, provider, embeddable). NEVER audioUrl — YouTube signed stream
+    // URLs expire within minutes, so handing out a cached one is handing out a
+    // dead URL (stream 403/502 -> embed fallback). A cache hit still re-runs
+    // the yt-dlp extraction below to mint a fresh audioUrl.
     const cached = cacheGet(cacheKey);
-    if (cached) return { ...cached, url: canonical };
 
-    // Get metadata from oEmbed — best effort, never fatal
+    // Get metadata from oEmbed — best effort, never fatal. Only on a cache
+    // miss; title/artist/embeddable are stable within the TTL.
     let title = null;
     let artist = null;
     let embeddable = false;
-    try {
-        const oembed = await fetchJSON(`https://www.youtube.com/oembed?url=${encodeURIComponent(canonical)}&format=json`);
-        title = oembed.title || null;
-        artist = oembed.author_name || null;
-        embeddable = !!oembed.html;
-    } catch {
-        // ignore — metadata is optional
+    if (!cached) {
+        try {
+            const oembed = await fetchJSON(`https://www.youtube.com/oembed?url=${encodeURIComponent(canonical)}&format=json`);
+            title = oembed.title || null;
+            artist = oembed.author_name || null;
+            embeddable = !!oembed.html;
+        } catch {
+            // ignore — metadata is optional
+        }
+    } else {
+        title = cached.title;
+        artist = cached.artist;
+        embeddable = cached.embeddable === true;
     }
 
     // Get audio stream URL via yt-dlp. A track without a playable stream is a
@@ -228,7 +239,20 @@ async function resolveYouTube(url, opts = {}) {
         audioUrl,
         embeddable,
     };
-    cacheSet(cacheKey, result);
+    // Cache METADATA ONLY (see the split above) and only on success — a failed
+    // extraction must never poison the cache (it also leaves nothing for the
+    // failure path, which throws long before this line).
+    if (!cached) {
+        cacheSet(cacheKey, {
+            url: canonical,
+            title,
+            artist,
+            artwork: result.artwork,
+            duration: null,
+            provider: "youtube",
+            embeddable,
+        });
+    }
     return result;
 }
 
@@ -277,6 +301,31 @@ async function resolveTrack(url, opts = {}) {
     }
 }
 
+// Best-effort room refresh: replace a track's signed audioUrl (captured at add
+// time, likely expired by play time) with a fresh one, merging in any fresher
+// metadata. Non-youtube tracks (uploads, soundcloud) and any failure return the
+// track UNCHANGED — never throws, callers treat this as best-effort.
+async function refreshTrack(track, opts = {}) {
+    if (!track || typeof track !== "object" || typeof track.url !== "string") return track;
+    try {
+        if (detectProvider(track.url) !== "youtube") return track;
+        const fresh = await resolveTrack(track.url, opts);
+        if (!fresh || !fresh.audioUrl) return track;
+        return {
+            ...track,
+            audioUrl: fresh.audioUrl,
+            ...(fresh.title != null ? { title: fresh.title } : {}),
+            ...(fresh.artist != null ? { artist: fresh.artist } : {}),
+            ...(fresh.artwork != null ? { artwork: fresh.artwork } : {}),
+            ...(fresh.embeddable != null ? { embeddable: fresh.embeddable } : {}),
+            ...(fresh.duration != null ? { duration: fresh.duration } : {}),
+        };
+    } catch (err) {
+        console.log("[solace:BE] refreshTrack failed", { url: track.url, error: err.message });
+        return track;
+    }
+}
+
 module.exports = {
     detectProvider,
     extractYouTubeId,
@@ -286,5 +335,6 @@ module.exports = {
     resolveTrack,
     resolveYouTube,
     resolveSoundCloud,
+    refreshTrack,
     cacheClear,
 };
