@@ -312,6 +312,18 @@ describe("yt-dlp concurrency semaphore", () => {
             assert.equal(result.audioUrl, STREAM_URL);
         });
     });
+
+    it("releases the slot when extraction fails", async () => {
+        cacheClear();
+        await withEnv({ SOLACE_MAX_CONCURRENT_RESOLVES: "2" }, async () => {
+            await assert.rejects(
+                resolveYouTube(YT4, { execFileAsync: fakeExecFailure }),
+                (err) => err.message === "NO_AUDIO_STREAM"
+            );
+            const result = await resolveYouTube(YT5, { execFileAsync: fakeExecSuccess });
+            assert.equal(result.audioUrl, STREAM_URL);
+        });
+    });
 });
 
 describe("refreshTrack", () => {
