@@ -113,7 +113,24 @@ jobs:
           echo "deploying uuid=${{ env.uuid }}"
           API POST /api/v1/deploy "{\"uuid\":\"${{ env.uuid }}\",\"force\":true}"
 
-      - name: Wait for container + external port check
+      - name: Deployment status
+        run: |
+          source /tmp/cf.sh
+          ${{ env.uuid != '' && 'echo "uuid env present"' || 'echo "NO uuid env"' }}
+          API GET "/api/v1/projects" > /dev/null
+          for i in $(seq 1 18); do
+            D=$(API GET "/api/v1/deployments/applications/${{ env.uuid }}" 2>/dev/null || echo '[]')
+            ST=$(echo "$D" | jq -r 'sort_by(.created_at) | last | .status // "unknown"')
+            echo "deployment status=$ST ($i)"
+            [ "$ST" = "finished" ] || [ "$ST" = "failed" ] || [ "$ST" = "exited" ] || [ "$ST" = "success" ] && break
+            sleep 10
+          done
+      - name: App logs (tail)
+        if: always()
+        run: |
+          source /tmp/cf.sh
+          API GET "/api/v1/applications/${{ env.uuid }}/logs?limit=30" 2>/dev/null | tail -c 3000 || echo "no logs endpoint"
+      - name: External port check
         run: |
           # give the build/pull time; poll TCP 3478 from this external runner
           for i in $(seq 1 24); do
