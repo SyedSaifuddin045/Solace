@@ -25,26 +25,27 @@ jobs:
           set -euo pipefail
           API() {
             local m=$1 url=$2 data=${3:-}
-            local code body
+            local tmp headers code body
+            tmp=$(mktemp)
             if [ -n "$data" ]; then
-              body=$(curl -sS -w "\n@%{http_code}" -X "$m" "$CF_BASE$url" \
+              curl -sS -D "$tmp.h" -o "$tmp.b" -w "%{http_code}" -X "$m" "$CF_BASE$url" \
                 -H "Authorization: Bearer $CF_TOKEN" \
                 -H "Content-Type: application/json" \
                 -H "Accept: application/json" \
-                -d "$data")
+                -d "$data" > "$tmp.c" 2>/dev/null || true
             else
-              body=$(curl -sS -w "\n@%{http_code}" -X "$m" "$CF_BASE$url" \
+              curl -sS -D "$tmp.h" -o "$tmp.b" -w "%{http_code}" -X "$m" "$CF_BASE$url" \
                 -H "Authorization: Bearer $CF_TOKEN" \
-                -H "Accept: application/json")
+                -H "Accept: application/json" > "$tmp.c" 2>/dev/null || true
             fi
-            local code="${body##*@}"
-            body="${body%@*}"
+            code=$(cat "$tmp.c")
             if [ "$code" -ge 400 ]; then
               echo "HTTP $code for $m $url" >&2
-              echo "$body" >&2
+              head -30 "$tmp.h" >&2
+              cat "$tmp.b" >&2
               return 1
             fi
-            echo "$body"
+            cat "$tmp.b"
           }
           EOF
           echo "helper written"
