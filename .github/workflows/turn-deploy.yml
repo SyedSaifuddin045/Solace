@@ -53,6 +53,29 @@ jobs:
           API GET /api/v1/applications > /tmp/apps.json || true
           jq -r '.[] | "APP \(.uuid) \(.name) \(.status)"' /tmp/apps.json 2>/dev/null || echo "no apps list"
 
+      - name: Discover API routes
+        run: |
+          source /tmp/cf.sh
+          for p in "/api/v1/openapi" "/api/v1/openapi.json" "/api/docs" "/api/v1/applications/types"; do
+            echo "=== $p ==="
+            API GET "$p" > /tmp/routes.json 2>/dev/null || { echo "no (404/err)"; continue; }
+            python3 - <<'PYEOF'
+import json
+d=json.load(open('/tmp/routes.json'))
+def walk(o, prefix=""):
+    if isinstance(o, dict):
+        for k,v in o.items():
+            if k in ("paths","get","post","put","delete","patch") and isinstance(v, dict):
+                for sub in ([k] if k!="paths" else list(v.keys())):
+                    pass
+        # simpler: print all path keys
+if isinstance(d, dict) and "paths" in d:
+    print("PATHS:", " ".join(sorted(d["paths"].keys())))
+else:
+    print("TYPE", type(d).__name__, "KEYS", list(d.keys())[:10] if isinstance(d,dict) else str(d)[:200])
+PYEOF
+          done
+
       - name: Create coturn compose app (idempotent)
         run: |
           source /tmp/cf.sh
