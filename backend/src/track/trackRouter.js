@@ -62,6 +62,13 @@ function createTrackRouter(roomService) {
             res.json(result);
         } catch (err) {
             console.log("[solace:BE] track resolve FAILED", { url: url.slice(0, 120), error: err.message, code: err.code });
+            if (err.code === "RATE_LIMITED") {
+                return res.status(429).json({
+                    error: "RATE_LIMITED",
+                    message: "Too many resolutions in flight — try again shortly",
+                    playable: false,
+                });
+            }
             const messages = {
                 NO_AUDIO_STREAM: "Couldn't fetch a playable stream for this track (YouTube may have blocked it here). Try another song.",
                 SOUNDCLOUD_STREAM_UNSUPPORTED: "SoundCloud playback isn't available yet — paste a YouTube link instead.",

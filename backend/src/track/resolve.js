@@ -24,6 +24,18 @@ const CACHE_MAX = 500;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const MAX_RESPONSE_BYTES = 256 * 1024; // 256KB cap on external JSON responses
 
+// Concurrency gate for yt-dlp subprocesses: bounds CPU burn when an attacker
+// fires many resolves in parallel. With two slots, a single attacker wastes at
+// most two yt-dlp procs at once; further attempts get an immediate RATE_LIMITED
+// (no queue — a queue is just a memory DoS).
+const DEFAULT_MAX_CONCURRENT_RESOLVES = 2;
+let inflightResolves = 0;
+
+function maxConcurrentResolves() {
+    const n = parseInt(process.env.SOLACE_MAX_CONCURRENT_RESOLVES, 10);
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_CONCURRENT_RESOLVES;
+}
+
 const cache = new Map();
 
 function detectProvider(url) {
@@ -151,6 +163,20 @@ function buildYtDlpArgs(canonical, opts = {}) {
 const MAX_PROXY_ATTEMPTS = 4;
 
 async function resolveYouTube(url, opts = {}) {
+    if (inflightResolves >= maxConcurrentResolves()) {
+        const err = new Error("RATE_LIMITED");
+        err.code = "RATE_LIMITED";
+        throw err;
+    }
+    inflightResolves += 1;
+    try {
+        return await resolveYouTubeInner(url, opts);
+    } finally {
+        inflightResolves -= 1;
+    }
+}
+
+async function resolveYouTubeInner(url, opts = {}) {
     const videoId = extractYouTubeId(url);
     if (!videoId) throw new Error("INVALID_YOUTUBE_URL");
 
