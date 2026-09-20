@@ -50,7 +50,7 @@ TURN_REALM=solace.local
 
 Add a domain in **Configuration → Domains**:
 ```
-https://api.solace.yourdomain.com
+https://api.solaceroom.xyz
 ```
 
 ### 1.5 Persistent Storage
@@ -90,12 +90,12 @@ In **Configuration → Environment Variables**:
 ```
 PORT=3000
 HOSTNAME=0.0.0.0
-NEXT_PUBLIC_BACKEND_URL=https://api.solace.yourdomain.com
+NEXT_PUBLIC_BACKEND_URL=https://api.solaceroom.xyz
 ```
 
 In **Configuration → General → Build Arguments** (or Advanced → Docker Build Args):
 ```
-NEXT_PUBLIC_BACKEND_URL=https://api.solace.yourdomain.com
+NEXT_PUBLIC_BACKEND_URL=https://api.solaceroom.xyz
 ```
 
 > ⚠️ The build arg value must match the env var value exactly. If you change the backend domain later, you must **rebuild** the frontend (not just restart).
@@ -104,7 +104,7 @@ NEXT_PUBLIC_BACKEND_URL=https://api.solace.yourdomain.com
 
 Add a domain in **Configuration → Domains**:
 ```
-https://solace.yourdomain.com
+https://solaceroom.xyz
 ```
 
 ### 2.5 Deploy
@@ -120,7 +120,7 @@ After the frontend is deployed and you have its domain:
 1. Go to **solace-backend** → **Configuration → Environment Variables**
 2. Update `CLIENT_ORIGIN` to match your frontend domain exactly:
    ```
-   CLIENT_ORIGIN=https://solace.yourdomain.com
+   CLIENT_ORIGIN=https://solaceroom.xyz
    ```
 3. **Redeploy** the backend
 
@@ -128,7 +128,7 @@ After the frontend is deployed and you have its domain:
 
 ## Step 4: Verify
 
-1. Open `https://solace.yourdomain.com`
+1. Open `https://solaceroom.xyz`
 2. You should see the Solace join screen
 3. Create a room → verify the room loads
 4. Open a second tab → join the same room
@@ -185,9 +185,9 @@ After the frontend is deployed and you have its domain:
 ## Architecture
 
 ```
-Browser → solace.yourdomain.com (Coolify proxy → frontend:3000)
+Browser → solaceroom.xyz (Coolify proxy → frontend:3000)
             ↕ WebSocket
-        api.solace.yourdomain.com (Coolify proxy → backend:8080)
+        api.solaceroom.xyz (Coolify proxy → backend:8080)
             ↕ WebRTC (peer-to-peer via coturn if needed)
 ```
 
