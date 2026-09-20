@@ -9,6 +9,7 @@ const createActivityHandler = require("./handlers/activityHandler");
 const createTimerHandler = require("./handlers/timerHandler");
 const { createRtcHandler, resolveIceServers } = require("./handlers/rtcHandler");
 const { refreshTrack } = require("../track/resolve");
+const { createConnectionGuard } = require("./ipLimits");
 
 function createSocketServer(httpServer, roomService = new RoomService(MemoryRoomStore, null, { refreshTrack })) {
     const io = new Server(httpServer, {
@@ -19,6 +20,10 @@ function createSocketServer(httpServer, roomService = new RoomService(MemoryRoom
         // Bound packet size at the transport level (default is 1MB; tighten to 256KB)
         maxHttpBufferSize: 256 * 1024
     });
+
+    // Per-IP + total connection caps: reject new sockets past the ceilings.
+    // Rejected clients get connect_error('RATE_LIMITED').
+    io.use(createConnectionGuard({}));
 
     // Per-socket, per-event-window throttle: prevents event flood amplification
     // into room broadcasts. Relay events (rtc:offer/answer/ice) are 1:1 fan-out,
