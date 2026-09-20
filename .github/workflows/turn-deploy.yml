@@ -94,7 +94,7 @@ jobs:
           ENV_NAME="${ENV_NAME:-production}"
           jq -n \
             --arg p "$PROJECT_UUID" --arg s "$SERVER_UUID" --arg e "$ENV_NAME" --arg eu "$ENV_UUID" \
-            '{server_uuid:$s, project_uuid:$p, environment_name:$e, environment_uuid:$eu, name:"solace-turn", description:"coturn WebRTC relay", git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", build_pack:"dockercompose", docker_compose_location:"docker-compose.turn.yml", is_auto_deploy_enabled:false, instant_deploy:false}' > /tmp/body.json
+            '{server_uuid:$s, project_uuid:$p, environment_name:$e, environment_uuid:$eu, name:"solace-turn", description:"coturn WebRTC relay", git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", build_pack:"dockercompose", docker_compose_location:"/docker-compose.turn.yml", is_auto_deploy_enabled:false, instant_deploy:false}' > /tmp/body.json
           cat /tmp/body.json
           if [ -n "$EXISTING" ]; then
             echo "APP EXISTS uuid=$EXISTING (skip create)"
