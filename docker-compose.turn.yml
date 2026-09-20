@@ -1,7 +1,6 @@
 services:
   coturn:
     image: coturn/coturn:4.6
-    container_name: solace-turn
     restart: unless-stopped
     network_mode: host
     command:
