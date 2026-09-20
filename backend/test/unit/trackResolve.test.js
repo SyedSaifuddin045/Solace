@@ -250,11 +250,11 @@ describe("resolveTrack playability contract", () => {
 });
 
 describe("yt-dlp concurrency semaphore", () => {
-    const YT1 = "https://www.youtube.com/watch?v=aaaaaaaaaaa";
-    const YT2 = "https://www.youtube.com/watch?v=bbbbbbbbbbb";
-    const YT3 = "https://www.youtube.com/watch?v=ccccccccccc";
-    const YT4 = "https://www.youtube.com/watch?v=ddddddddddd";
-    const YT5 = "https://www.youtube.com/watch?v=eeeeeeeeeee";
+    const YT1 = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+    const YT2 = "https://www.youtube.com/watch?v=9bZkp7q19f0";
+    const YT3 = "https://www.youtube.com/watch?v=kJQP7kiw5Fk";
+    const YT4 = "https://www.youtube.com/watch?v=fJ9rUzIMcZQ";
+    const YT5 = "https://www.youtube.com/watch?v=hTWKbfoikeg";
 
     function withEnv(kv, fn) {
         const saved = {};
