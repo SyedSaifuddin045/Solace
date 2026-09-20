@@ -1,0 +1,100 @@
+name: Deploy coturn TURN server to Coolify
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-turn:
+    runs-on: ubuntu-latest
+    env:
+      CF_BASE: ${{ secrets.COOLIFY_BASE_URL }}
+      CF_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show env base (not secret value itself, just host)
+        run: echo "coolify base = $CF_BASE"
+
+      - name: API helper
+        id: helper
+        run: |
+          cat > /tmp/cf.sh <<'EOF'
+          set -euo pipefail
+          API() {
+            local m=$1 url=$2 data=${3:-}
+            if [ -n "$data" ]; then
+              curl -fsS -m 60 -X "$m" "$CF_BASE$url" \
+                -H "Authorization: Bearer $CF_TOKEN" \
+                -H "Content-Type: application/json" \
+                -H "Accept: application/json" \
+                -d "$data"
+            else
+              curl -fsS -m 60 -X "$m" "$CF_BASE$url" \
+                -H "Authorization: Bearer $CF_TOKEN" \
+                -H "Accept: application/json"
+            fi
+          }
+          EOF
+          echo "helper written"
+
+      - name: Probe Coolify (version, servers, projects)
+        run: |
+          source /tmp/cf.sh
+          echo "--- version"
+          echo "VERSION: $(API GET /api/v1/version || echo n/a)"
+          echo "--- servers"
+          API GET /api/v1/servers > /tmp/servers.json
+          jq -r '.[] | "SERVER \(.uuid) \(.name) ip=\(.ip) \(.settings.is_reachable)"' /tmp/servers.json || cat /tmp/servers.json
+          echo "--- projects"
+          API GET /api/v1/projects > /tmp/projects.json
+          jq -r '.[] | "PROJECT \(.uuid) \(.name) envs=\([.environments[].name]|join(","))"' /tmp/projects.json || cat /tmp/projects.json
+          echo "--- existing apps"
+          API GET /api/v1/applications > /tmp/apps.json || true
+          jq -r '.[] | "APP \(.uuid) \(.name) \(.status)"' /tmp/apps.json 2>/dev/null || echo "no apps list"
+          cp /tmp/servers.json /tmp/projects.json /tmp/apps.json /tmp/
+
+      - name: Create coturn compose app (idempotent)
+        run: |
+          source /tmp/cf.sh
+          SERVER_UUID=$(jq -r '.[0].uuid' /tmp/servers.json)
+          PROJECT_UUID=$(jq -r '.[0].uuid' /tmp/projects.json)
+          echo "server=$SERVER_UUID project=$PROJECT_UUID"
+          # Find project environment uuid (draft/production)
+          ENV_UUID=$(jq -r --arg p "$PROJECT_UUID" '.[] | select(.uuid==$p) | .environments[0].uuid' /tmp/projects.json)
+          echo "env=$ENV_UUID"
+          EXISTING=$(jq -r '.[] | select(.name=="solace-turn") | .uuid' /tmp/apps.json 2>/dev/null | head -1)
+          jq -n \
+            --arg p "$PROJECT_UUID" --arg e "$ENV_UUID" --arg s "$SERVER_UUID" \
+            '{server_uuid:$s, project_uuid:$p, environment_name:"production", git_repository:"https://github.com/SyedSaifuddin045/Solace.git", git_branch:"turn-deploy", docker_compose_location:"docker-compose.turn.yml", ports_exposes:"3478", name:"solace-turn", description:"coturn relay for WebRTC"}' > /tmp/body.json
+          cat /tmp/body.json
+          if [ -n "$EXISTING" ]; then
+            echo "APP EXISTS uuid=$EXISTING (skip create)"
+            echo "uuid=$EXISTING" >> "$GITHUB_ENV"
+          else
+            echo "creating app..."
+            RESP=$(API POST /api/v1/applications/docker-compose "$(cat /tmp/body.json)")
+            echo "$RESP"
+            UUID=$(echo "$RESP" | jq -r '.uuid')
+            echo "uuid=$UUID" >> "$GITHUB_ENV"
+          fi
+          echo "TARGET_UUID=$EXISTING${EXISTING:+}"
+
+      - name: Deploy coturn
+        run: |
+          source /tmp/cf.sh
+          echo "deploying uuid=${{ env.uuid }}"
+          API POST /api/v1/deploy "{\"uuid\":\"${{ env.uuid }}\",\"force\":true}"
+
+      - name: Wait for container + external port check
+        run: |
+          # give the build/pull time; poll TCP 3478 from this external runner
+          for i in $(seq 1 24); do
+            sleep 10
+            if timeout 5 bash -c "</dev/tcp/167.233.63.56/3478" 2>/dev/null; then
+              echo "TCP 3478 OPEN after ~$((i*10))s"
+              break
+            fi
+            echo "waiting... ($i)"
+          done
+          timeout 5 bash -c "</dev/tcp/167.233.63.56/3478" 2>/dev/null && echo "FINAL: tcp3478 OPEN" || echo "FINAL: tcp3478 CLOSED/TIMEOUT"
