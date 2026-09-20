@@ -25,17 +25,26 @@ jobs:
           set -euo pipefail
           API() {
             local m=$1 url=$2 data=${3:-}
+            local code body
             if [ -n "$data" ]; then
-              curl -fsS -m 60 -X "$m" "$CF_BASE$url" \
+              body=$(curl -sS -w "\n@%{http_code}" -X "$m" "$CF_BASE$url" \
                 -H "Authorization: Bearer $CF_TOKEN" \
                 -H "Content-Type: application/json" \
                 -H "Accept: application/json" \
-                -d "$data"
+                -d "$data")
             else
-              curl -fsS -m 60 -X "$m" "$CF_BASE$url" \
+              body=$(curl -sS -w "\n@%{http_code}" -X "$m" "$CF_BASE$url" \
                 -H "Authorization: Bearer $CF_TOKEN" \
-                -H "Accept: application/json"
+                -H "Accept: application/json")
             fi
+            local code="${body##*@}"
+            body="${body%@*}"
+            if [ "$code" -ge 400 ]; then
+              echo "HTTP $code for $m $url" >&2
+              echo "$body" >&2
+              return 1
+            fi
+            echo "$body"
           }
           EOF
           echo "helper written"
