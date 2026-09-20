@@ -122,7 +122,7 @@ jobs:
             D=$(API GET "/api/v1/deployments/applications/${{ env.uuid }}" 2>/dev/null || echo '[]')
             ST=$(echo "$D" | jq -r 'sort_by(.created_at) | last | .status // "unknown"')
             echo "deployment status=$ST ($i)"
-            [ "$ST" = "finished" ] || [ "$ST" = "failed" ] || [ "$ST" = "exited" ] || [ "$ST" = "success" ] && break
+            case "$ST" in finished|failed|exited|success|error) break;; esac
             sleep 10
           done
       - name: App logs (tail)
@@ -130,6 +130,8 @@ jobs:
         run: |
           source /tmp/cf.sh
           API GET "/api/v1/applications/${{ env.uuid }}/logs?limit=30" 2>/dev/null | tail -c 3000 || echo "no logs endpoint"
+          echo "--- external ip lines:"
+          API GET "/api/v1/applications/${{ env.uuid }}/logs?limit=60" 2>/dev/null | grep -o "External IP addresses[^\"]*" | tail -c 500 || echo "no External IP line"
       - name: External port check
         run: |
           # give the build/pull time; poll TCP 3478 from this external runner
