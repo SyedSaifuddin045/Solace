@@ -130,9 +130,12 @@ jobs:
         if: always()
         run: |
           source /tmp/cf.sh
-          API GET "/api/v1/applications/${{ env.uuid }}/logs?limit=30" 2>/dev/null | tail -c 3000 || echo "no logs endpoint"
-          echo "--- external ip lines:"
-          API GET "/api/v1/applications/${{ env.uuid }}/logs?limit=60" 2>/dev/null | grep -o "External IP addresses[^\"]*" | tail -c 500 || echo "no External IP line"
+          sleep 12
+          API GET "/api/v1/applications/${{ env.uuid }}/logs?limit=100" 2>/dev/null > /tmp/applogs.json || true
+          echo "=== boot lines:"
+          grep -o "Coturn Version[^\"]*\|External IP addresses[^\"]*\|Relay address to use[^\"]*\|Unknown argument[^\"]*\|ERROR: CONFIG[^\"]*" /tmp/applogs.json | tail -8
+          echo "--- tail:"
+          cat /tmp/applogs.json | tail -c 900
       - name: External port check
         run: |
           # give the build/pull time; poll TCP 3478 from this external runner
